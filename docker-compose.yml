@@ -1,0 +1,53 @@
+# XEYE search-service.
+#
+# Se une a la red compartida `xeye-network` (créala una vez con ../create-network.sh) para
+# que Traefik y el resto de contenedores XEYE lo alcancen como `xeye-search-service:8002`.
+#
+# La URL del backend sale de DOCKER_BACKEND_URL — NO de BACKEND_URL. El BACKEND_URL del
+# `.env` es el del *host* (http://localhost:8000) y dentro de un contenedor localhost es
+# el propio contenedor; compose lo interpolaría sin quejarse y el bootstrap fallaría.
+# Define DOCKER_BACKEND_URL cuando el backend no esté en el default (p. ej. backend en el
+# host: http://host.docker.internal:8000).
+services:
+  search-service:
+    build:
+      context: .
+      args:
+        # También pre-descarga este modelo dentro de la imagen (ver Dockerfile).
+        EMBEDDING_MODEL_DEFAULT: ${EMBEDDING_MODEL_DEFAULT:-paraphrase-multilingual-MiniLM-L12-v2}
+    container_name: xeye-search-service
+    environment:
+      # URL del backend vista desde el contenedor (ver cabecera — a propósito no ${BACKEND_URL}).
+      BACKEND_URL: ${DOCKER_BACKEND_URL:-http://xeye-java-backend:8000}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      BACKEND_TIMEOUT_SECONDS: ${BACKEND_TIMEOUT_SECONDS:-30}
+      EMBEDDING_MODEL_DEFAULT: ${EMBEDDING_MODEL_DEFAULT:-paraphrase-multilingual-MiniLM-L12-v2}
+      MODELS_MAX_LOADED: ${MODELS_MAX_LOADED:-2}
+      CACHE_MAX_BYTES: ${CACHE_MAX_BYTES:-1073741824}
+      EXACT_SEARCH_MAX_ELEMENTS: ${EXACT_SEARCH_MAX_ELEMENTS:-4096}
+      SEARCH_TEXT_WEIGHT: ${SEARCH_TEXT_WEIGHT:-0.25}
+      SEARCH_SEMANTIC_WEIGHT: ${SEARCH_SEMANTIC_WEIGHT:-0.75}
+      SCORE_OVERRIDE_THRESHOLD: ${SCORE_OVERRIDE_THRESHOLD:-0.75}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173}
+      REFRESH_INTERVAL_SECONDS: ${REFRESH_INTERVAL_SECONDS:-3600}
+      LOG_BATCH_MAX: ${LOG_BATCH_MAX:-50}
+      LOG_FLUSH_SECONDS: ${LOG_FLUSH_SECONDS:-2.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${SEARCH_SERVICE_PORT:-8002}:8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - xeye-network
+
+networks:
+  xeye-network:
+    external: true
+    name: xeye-network
