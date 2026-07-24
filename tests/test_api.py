@@ -143,6 +143,13 @@ class TestPublicErrors:
         assert response.status_code == 403
         assert response.json()["error"] == "Lista no pública"
 
+    async def test_private_list_allowed_with_allow_private(self, ready_client, seeded_backend):
+        # El buscador del frontend manda allow_private=true; la key ya limita al dueño.
+        seeded_backend.list_payloads[6] = camera_payload()
+        response = await search(ready_client, "camara", list_name="Privada", allow_private=True)
+        assert response.status_code == 200
+        assert response.json()["total_results"] > 0
+
     async def test_backend_down_503(self, ready_client, seeded_backend):
         seeded_backend.fail_list_fetch = True
         response = await search(ready_client, "x")

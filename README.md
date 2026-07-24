@@ -65,7 +65,7 @@ app/
 
 Pública (cabecera `X-API-Key`, rate limit 60/min por key, CORS habilitado):
 
-- `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?, register_log?}`
+- `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?, register_log?, allow_private?}`
   → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms}`.
   Solo listas **públicas** del dueño de la key. Errores: `{error, detail}` con 401/403/404/429/503.
 - `POST /api/v1/target` — `{list_name, target_term, session}` → `{success}` (solo auditoría).

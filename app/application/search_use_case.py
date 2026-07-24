@@ -75,15 +75,19 @@ class SearchUseCase:
         self._log_queue = log_queue
         self._scoring = scoring
 
-    async def resolve_public_list(self, user_id: int, list_name: str) -> ListMeta:
+    async def resolve_public_list(
+        self, user_id: int, list_name: str, *, allow_private: bool = False
+    ) -> ListMeta:
         """La lista del llamante por nombre exacto; debe existir y ser pública (la API
-        pública solo sirve listas públicas, como en el contrato del servicio original)."""
+        pública solo sirve listas públicas, como en el contrato del servicio original).
+        ``allow_private`` (el buscador del frontend) lo salta: la key ya limita al dueño,
+        así que solo abre las listas privadas del propio llamante."""
         meta = self._catalogs.lists.resolve(user_id, list_name)
         if meta is None and await self._catalogs.refresh_on_miss():
             meta = self._catalogs.lists.resolve(user_id, list_name)
         if meta is None:
             raise ListNotFoundError(list_name)
-        if not meta.is_public:
+        if not meta.is_public and not allow_private:
             raise ListNotPublicError(list_name)
         return meta
 

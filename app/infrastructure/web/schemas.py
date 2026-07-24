@@ -21,6 +21,7 @@ class PublicSearchRequest(BaseModel):
     session: str | None = Field(default=None, max_length=255)
     include_score_breakdown: bool = False
     register_log: bool = True
+    allow_private: bool = False
 
 
 class PublicTargetRequest(BaseModel):

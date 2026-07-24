@@ -25,7 +25,9 @@ async def search(
     auth: Annotated[ApiKeyInfo, Depends(require_api_key)],
 ):
     search_use_case = request.app.state.container.search
-    meta = await search_use_case.resolve_public_list(auth.user_id, body.list_name)
+    meta = await search_use_case.resolve_public_list(
+        auth.user_id, body.list_name, allow_private=body.allow_private
+    )
     return await search_use_case.search(
         meta,
         auth,
