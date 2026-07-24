@@ -1,0 +1,19 @@
+meta {
+  name: Delete user
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/v1/users/{{userId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+docs {
+  Borra todas las API keys y listas (catálogo + caché) del usuario.
+}

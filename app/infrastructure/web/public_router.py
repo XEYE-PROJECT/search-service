@@ -33,6 +33,7 @@ async def search(
         body.limit,
         include_breakdown=body.include_score_breakdown,
         session=body.session,
+        register_log=body.register_log,
     )
 
 

@@ -1,0 +1,15 @@
+meta {
+  name: Delete list
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/v1/lists/{{listId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}

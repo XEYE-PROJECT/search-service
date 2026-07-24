@@ -108,6 +108,11 @@ class TestPublicSearch:
         assert log.session == "s-1"
         assert log.results  # {item: puntuación}
 
+    async def test_register_log_false_skips_logging(self, ready_client, container):
+        response = await search(ready_client, "cámara de fotos", register_log=False)
+        assert response.status_code == 200
+        assert container.log_queue.pending == 0
+
     async def test_target_only_logs(self, ready_client, container, seeded_backend):
         response = await ready_client.post(
             "/api/v1/target",

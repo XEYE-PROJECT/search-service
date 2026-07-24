@@ -1,0 +1,36 @@
+meta {
+  name: Index list (push de entrenamiento)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/lists/{{listId}}/index
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+body:json {
+  {
+    "userId": {{userId}},
+    "listName": "mi-lista",
+    "isPublic": true,
+    "model": "paraphrase-multilingual-MiniLM-L12-v2",
+    "embeddingsData": null,
+    "trainedElementIds": [1, 2],
+    "elements": [
+      { "id": 1, "text": "camiseta roja", "params": "{\"sku\":\"A1\"}", "description": "algodón" },
+      { "id": 2, "text": "pantalón azul", "params": null, "description": null }
+    ]
+  }
+}
+
+docs {
+  Lo envía el backend al completar un entrenamiento: reemplazo total de los datos de la lista.
+  Con `embeddingsData: null` la lista funciona en modo solo-texto (útil para probar sin entrenar).
+  Idempotente. Campos en camelCase (contrato del backend Java).
+}

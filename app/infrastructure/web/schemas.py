@@ -20,6 +20,7 @@ class PublicSearchRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=1000)
     session: str | None = Field(default=None, max_length=255)
     include_score_breakdown: bool = False
+    register_log: bool = True
 
 
 class PublicTargetRequest(BaseModel):

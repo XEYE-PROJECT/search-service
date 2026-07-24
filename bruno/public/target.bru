@@ -1,0 +1,32 @@
+meta {
+  name: Target
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/target
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+}
+
+body:json {
+  {
+    "list_name": "actividades_cyber",
+    "target_term": "Consultores calidad de agua",
+    "session": "bruno-test"
+  }
+}
+
+vars:pre-request {
+  apiKey: xeye_REDACTED_ROTATED
+}
+
+docs {
+  Registra el término finalmente elegido por el usuario (solo auditoría, no busca nada).
+  `session` es obligatorio: enlaza el target con las búsquedas previas de la misma sesión.
+}

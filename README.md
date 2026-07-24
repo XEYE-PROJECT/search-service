@@ -65,7 +65,7 @@ app/
 
 Pública (cabecera `X-API-Key`, rate limit 60/min por key, CORS habilitado):
 
-- `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?}`
+- `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?, register_log?}`
   → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms}`.
   Solo listas **públicas** del dueño de la key. Errores: `{error, detail}` con 401/403/404/429/503.
 - `POST /api/v1/target` — `{list_name, target_term, session}` → `{success}` (solo auditoría).
@@ -94,3 +94,7 @@ docker compose up --build
 Variables en `.env.example`. En el backend: `SEARCH_PROVIDER=http`,
 `SEARCH_SERVICE_URL=http://localhost:8002` (o `http://xeye-search-service:8002` en
 docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
+
+Para probar la API a mano hay una colección de [Bruno](https://www.usebruno.com/) en
+`bruno/` (ábrela con "Open Collection" y selecciona el entorno `local`; ajusta ahí
+`apiKey` e `internalToken`).

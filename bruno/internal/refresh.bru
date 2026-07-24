@@ -1,0 +1,19 @@
+meta {
+  name: Refresh catalog
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/v1/refresh
+  body: none
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+docs {
+  Fuerza un re-sync completo del catálogo (api keys + listas + modelos) desde el backend.
+}

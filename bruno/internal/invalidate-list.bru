@@ -1,0 +1,20 @@
+meta {
+  name: Invalidate list
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/v1/lists/{{listId}}/invalidate
+  body: none
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+docs {
+  Cambiaron elementos de la lista: descarta su caché; la próxima búsqueda recarga
+  perezosamente desde el backend (GET /internal/search/lists/{id}).
+}

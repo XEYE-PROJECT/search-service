@@ -1,0 +1,27 @@
+meta {
+  name: Update list meta
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/v1/lists/{{listId}}/meta
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+body:json {
+  {
+    "userId": {{userId}},
+    "name": "mi-lista-renombrada",
+    "isPublic": true
+  }
+}
+
+docs {
+  Renombrado / cambio de visibilidad: actualiza el catálogo; la caché de datos sigue valiendo.
+}

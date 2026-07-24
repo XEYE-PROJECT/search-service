@@ -1,0 +1,27 @@
+meta {
+  name: Upsert api key
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/v1/api-keys/{{apiKeyId}}
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+body:json {
+  {
+    "userId": {{userId}},
+    "apiKey": "{{apiKey}}"
+  }
+}
+
+docs {
+  Alta/actualización de una API key en el catálogo. Útil para registrar a mano la key
+  que luego usarás en los endpoints públicos sin esperar al re-sync con el backend.
+}
