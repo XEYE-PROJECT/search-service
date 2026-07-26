@@ -29,8 +29,8 @@ jobs:
           build-args: |
             EXTRA_EMBEDDING_MODELS=
           tags: |
-            ghcr.io/joanmartorell/search-service:latest
-            ghcr.io/joanmartorell/search-service:${{ github.sha }}
+            ghcr.io/xeye-project/search-service:latest
+            ghcr.io/xeye-project/search-service:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
