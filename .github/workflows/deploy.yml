@@ -25,9 +25,8 @@ jobs:
         with:
           context: .
           push: true
-          # Prod usa un único modelo (RAM de 4GB): no horneamos mpnet en la imagen.
-          build-args: |
-            EXTRA_EMBEDDING_MODELS=
+          # Sin override de EXTRA_EMBEDDING_MODELS: aplica el default del Dockerfile,
+          # que hornea mpnet además de MiniLM (prod ofrece ambos desde 2026-08-06).
           tags: |
             ghcr.io/xeye-project/search-service:latest
             ghcr.io/xeye-project/search-service:${{ github.sha }}
