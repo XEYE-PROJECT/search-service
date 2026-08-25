@@ -1,0 +1,277 @@
+[
+  {
+    "query": "asesor para montar mi empresa y hacer el plan de negocio",
+    "expected": "Consultores de negocio y/o estrategia, y/o financiero (no asesoramiento en inversiones)",
+    "category": "intencion"
+  },
+  {
+    "query": "consultor de recursos humanos y reclutamiento",
+    "expected": "Consultores en selección y recursos humanos",
+    "category": "sinonimo"
+  },
+  {
+    "query": "headhunting de directivos",
+    "expected": "Consultores en selección y recursos humanos",
+    "category": "atributo"
+  },
+  {
+    "query": "consultor RGPD y protección de datos",
+    "expected": "Consultores en materias de protección de datos",
+    "category": "atributo"
+  },
+  {
+    "query": "asesoro a empresas para exportar a otros países",
+    "expected": "Consultores en comercio exterior y/o consultor en  importación y exportación",
+    "category": "intencion"
+  },
+  {
+    "query": "auditorías de calidad ISO 9001",
+    "expected": "Consultores de calidad",
+    "category": "atributo"
+  },
+  {
+    "query": "consultoría de outsourcing de procesos",
+    "expected": "Consultores en externalización",
+    "category": "sinonimo"
+  },
+  {
+    "query": "asesor en compraventa y fusión de empresas",
+    "expected": "Consultores en fusiones y adquisiciones",
+    "category": "sinonimo"
+  },
+  {
+    "query": "registro de marcas y derechos de autor",
+    "expected": "Consultores en derechos de la propiedad intelectual y marcas (excluyendo patentes)",
+    "category": "atributo"
+  },
+  {
+    "query": "ayudo a empresas a conseguir ayudas públicas",
+    "expected": "Consultoría en subvenciones (excluida tramitación o gestión de subvenciones)",
+    "category": "intencion"
+  },
+  {
+    "query": "entrenador personal a domicilio",
+    "expected": "Entrenador físico deportivo (personal, gimnasio)",
+    "category": "sinonimo"
+  },
+  {
+    "query": "doy clases y cursos de formación para empresas",
+    "expected": "Profesor / formador",
+    "category": "intencion"
+  },
+  {
+    "query": "academia de idiomas",
+    "expected": "Escuelas de formación-academias",
+    "category": "sinonimo"
+  },
+  {
+    "query": "guardería infantil",
+    "expected": "Centros de enseñanza: colegios, universidades, guarderías",
+    "category": "sinonimo"
+  },
+  {
+    "query": "tengo un gimnacio",
+    "expected": "Gimnasios y centros deportivos",
+    "category": "typo"
+  },
+  {
+    "query": "monitor de campamentos de verano para niños",
+    "expected": "Servicios de entretenimiento: animadores, monitores de tiempo libre (excluidas actividades de aventura)",
+    "category": "intencion"
+  },
+  {
+    "query": "diseñador de logotipos e identidad visual",
+    "expected": "Diseño gráfico",
+    "category": "sinonimo"
+  },
+  {
+    "query": "agencia de posicionamiento SEO y SEM",
+    "expected": "Marketing digital",
+    "category": "atributo"
+  },
+  {
+    "query": "gestiono las redes sociales de empresas",
+    "expected": "Community manager",
+    "category": "intencion"
+  },
+  {
+    "query": "estudios de mercado y tendencias de consumo",
+    "expected": "Investigación de mercados",
+    "category": "sinonimo"
+  },
+  {
+    "query": "editorial que publica libros",
+    "expected": "Edición de libros",
+    "category": "sinonimo"
+  },
+  {
+    "query": "portal de noticias en internet",
+    "expected": "Medios online - actividades informativas en internet (excluido blogs y social media)",
+    "category": "atributo"
+  },
+  {
+    "query": "productora de vídeo y cine",
+    "expected": "Producción audiovisual",
+    "category": "sinonimo"
+  },
+  {
+    "query": "dietista para planes de alimentación",
+    "expected": "Asesores en nutrición – nutricionista / dietistas",
+    "category": "intencion"
+  },
+  {
+    "query": "fisio para rehabilitación de lesiones",
+    "expected": "Fisioterapeutas / ergoterapeutas.",
+    "category": "sinonimo"
+  },
+  {
+    "query": "salón de belleza y uñas",
+    "expected": "Peluquería/ esteticista / depilación / manicura / pedicura",
+    "category": "sinonimo"
+  },
+  {
+    "query": "sicólogo infantil",
+    "expected": "Psicólogos",
+    "category": "typo"
+  },
+  {
+    "query": "estudio de tatuajes",
+    "expected": "Tatuadores",
+    "category": "sinonimo"
+  },
+  {
+    "query": "masajes descontracturantes",
+    "expected": "Masajistas y quiromasajistas",
+    "category": "sinonimo"
+  },
+  {
+    "query": "organizo bodas",
+    "expected": "Organizador de bodas (Wedding planner)",
+    "category": "intencion"
+  },
+  {
+    "query": "organizador de congresos y eventos corporativos",
+    "expected": "Organizador de eventos",
+    "category": "sinonimo"
+  },
+  {
+    "query": "escribo novelas",
+    "expected": "Escritores (excluyendo los periodistas)",
+    "category": "intencion"
+  },
+  {
+    "query": "bufete de abogados",
+    "expected": "Abogados / despacho de abogados / administrador concursal",
+    "category": "sinonimo"
+  },
+  {
+    "query": "gestoría para autónomos, nóminas e impuestos",
+    "expected": "Gestoría y asesoría fiscal, laboral y/o contable",
+    "category": "intencion"
+  },
+  {
+    "query": "traducctor jurado de documentos",
+    "expected": "Intérpretes y traductores",
+    "category": "typo"
+  },
+  {
+    "query": "fotógrafo de bodas y eventos",
+    "expected": "Fotógrafos",
+    "category": "sinonimo"
+  },
+  {
+    "query": "cuido niños a domicilio",
+    "expected": "Niñeras",
+    "category": "intencion"
+  },
+  {
+    "query": "clínica veterinaria",
+    "expected": "Veterinario",
+    "category": "sinonimo"
+  },
+  {
+    "query": "empresa de desratización y fumigación",
+    "expected": "Control de plagas (excluyendo agricultura)",
+    "category": "sinonimo"
+  },
+  {
+    "query": "taller de reparación de coches",
+    "expected": "Taller mecánico (no industrial)",
+    "category": "sinonimo"
+  },
+  {
+    "query": "agencia de biajes",
+    "expected": "Agencia de viaje",
+    "category": "typo"
+  },
+  {
+    "query": "empresa de limpieza de oficinas",
+    "expected": "Limpieza general de edificios",
+    "category": "sinonimo"
+  },
+  {
+    "query": "arreglo lavadoras y neveras",
+    "expected": "Reparación de electrodomésticos",
+    "category": "intencion"
+  },
+  {
+    "query": "cerrajero 24 horas",
+    "expected": "Cerrajeros",
+    "category": "atributo"
+  },
+  {
+    "query": "fontanero",
+    "expected": "Trabajos de fontanería",
+    "category": "sinonimo"
+  },
+  {
+    "query": "montador de muebles a domicilio",
+    "expected": "Instalación de mobiliario en viviendas, oficinas y locales comerciales",
+    "category": "sinonimo"
+  },
+  {
+    "query": "instalador de placas solares en tejados",
+    "expected": "Instalación, mantenimiento y montaje de energía solar, termica y fotovoltaica",
+    "category": "sinonimo"
+  },
+  {
+    "query": "programador de aplicaciones móviles",
+    "expected": "Desarrollo de software o apps (excluyendo salud, financiero, industrial, pago o cadena de suministro)",
+    "category": "sinonimo"
+  },
+  {
+    "query": "empresa de pentesting y seguridad informática",
+    "expected": "Servicios de ciberseguridad",
+    "category": "sinonimo"
+  },
+  {
+    "query": "hosting de páginas web",
+    "expected": "Servicios de hosting o data center",
+    "category": "sinonimo"
+  },
+  {
+    "query": "consultora de transformación digital",
+    "expected": "Consultoria it (incluida transformación digital)",
+    "category": "atributo"
+  },
+  {
+    "query": "tienda online de ropa",
+    "expected": "Venta minorista",
+    "category": "intencion"
+  },
+  {
+    "query": "restaurante de comida tradicional",
+    "expected": "Restaurantes y servicios de alimentación",
+    "category": "sinonimo"
+  },
+  {
+    "query": "servicio de catering para bodas",
+    "expected": "Catering",
+    "category": "atributo"
+  },
+  {
+    "query": "administrador de fincas",
+    "expected": "Administradores de fincas  / consultor inmobiliario / agencias de la propiedad inmobiliaria - api",
+    "category": "sinonimo"
+  }
+]

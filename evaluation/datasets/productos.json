@@ -1,0 +1,46 @@
+[
+  {"query": "cascos sin cables con cancelación de ruido", "expected": "Auriculares inalámbricos Bluetooth con cancelación activa de ruido", "category": "sinonimo"},
+  {"query": "auriculares para aislarme del ruido en la oficina", "expected": "Auriculares inalámbricos Bluetooth con cancelación activa de ruido", "category": "intencion"},
+  {"query": "auriculares bluetoth de diadema", "expected": "Auriculares inalámbricos Bluetooth con cancelación activa de ruido", "category": "typo"},
+  {"query": "cascos con 40 horas de batería y carga usb-c", "expected": "Auriculares inalámbricos Bluetooth con cancelación activa de ruido", "category": "atributo"},
+
+  {"query": "reloj para salir a correr con GPS", "expected": "Smartwatch deportivo con GPS y pulsómetro", "category": "intencion"},
+  {"query": "smartwatch Fitrona", "expected": "Smartwatch deportivo con GPS y pulsómetro", "category": "marca"},
+  {"query": "reloj que mide el pulso y el oxígeno en sangre", "expected": "Smartwatch deportivo con GPS y pulsómetro", "category": "atributo"},
+  {"query": "reloj inteligente resistente al agua para nadar", "expected": "Smartwatch deportivo con GPS y pulsómetro", "category": "sinonimo"},
+
+  {"query": "tableta para estudiar y ver series", "expected": "Tablet 11 pulgadas 128 GB WiFi", "category": "intencion"},
+  {"query": "tablet con pantalla 2K y 8 GB de RAM", "expected": "Tablet 11 pulgadas 128 GB WiFi", "category": "atributo"},
+  {"query": "tablet Novatek 128 gigas", "expected": "Tablet 11 pulgadas 128 GB WiFi", "category": "marca"},
+
+  {"query": "ordenador ligero para llevar a la universidad", "expected": "Portátil ultrabook 14 pulgadas Intel Core i5 16 GB RAM", "category": "intencion"},
+  {"query": "portatil i5 16gb ssd 512", "expected": "Portátil ultrabook 14 pulgadas Intel Core i5 16 GB RAM", "category": "typo"},
+  {"query": "laptop de 14 pulgadas con mucha batería", "expected": "Portátil ultrabook 14 pulgadas Intel Core i5 16 GB RAM", "category": "sinonimo"},
+
+  {"query": "pantalla para jugar a 165 hz", "expected": "Monitor gaming 27 pulgadas 165 Hz QHD", "category": "sinonimo"},
+  {"query": "monitor curvo QHD con FreeSync", "expected": "Monitor gaming 27 pulgadas 165 Hz QHD", "category": "atributo"},
+  {"query": "monitor PixelView para gaming", "expected": "Monitor gaming 27 pulgadas 165 Hz QHD", "category": "marca"},
+
+  {"query": "teclado gaming con luces de colores", "expected": "Teclado mecánico inalámbrico retroiluminado RGB", "category": "sinonimo"},
+  {"query": "teclado Keyforge con switches rojos", "expected": "Teclado mecánico inalámbrico retroiluminado RGB", "category": "marca"},
+  {"query": "teclado mecanico compacto 75 por ciento", "expected": "Teclado mecánico inalámbrico retroiluminado RGB", "category": "atributo"},
+  {"query": "teclado mecanico retroluminado rjb", "expected": "Teclado mecánico inalámbrico retroiluminado RGB", "category": "typo"},
+
+  {"query": "ratón para el dolor de muñeca", "expected": "Ratón inalámbrico ergonómico vertical", "category": "intencion"},
+  {"query": "mouse vertical inalámbrico", "expected": "Ratón inalámbrico ergonómico vertical", "category": "sinonimo"},
+  {"query": "raton ergonomico con botones programables", "expected": "Ratón inalámbrico ergonómico vertical", "category": "atributo"},
+
+  {"query": "cámara para videollamadas de teletrabajo", "expected": "Webcam Full HD 1080p con micrófono y tapa de privacidad", "category": "intencion"},
+  {"query": "webcam 1080p 60 fps con enfoque automático", "expected": "Webcam Full HD 1080p con micrófono y tapa de privacidad", "category": "atributo"},
+  {"query": "camara web con tapa de privacidad", "expected": "Webcam Full HD 1080p con micrófono y tapa de privacidad", "category": "sinonimo"},
+
+  {"query": "altavoz para llevar a la piscina", "expected": "Altavoz Bluetooth portátil resistente al agua IPX7", "category": "intencion"},
+  {"query": "altavoz sumergible ipx7", "expected": "Altavoz Bluetooth portátil resistente al agua IPX7", "category": "atributo"},
+  {"query": "speaker bluetooth 30W con graves potentes", "expected": "Altavoz Bluetooth portátil resistente al agua IPX7", "category": "sinonimo"},
+  {"query": "altavoz SoundCore que también carga el móvil", "expected": "Altavoz Bluetooth portátil resistente al agua IPX7", "category": "marca"},
+
+  {"query": "algo para cargar el móvil en un vuelo largo", "expected": "Batería externa 20000 mAh carga rápida 22,5 W", "category": "intencion"},
+  {"query": "powerbank 20000 con carga rápida", "expected": "Batería externa 20000 mAh carga rápida 22,5 W", "category": "sinonimo"},
+  {"query": "bateria externa con pantalla led de porcentaje", "expected": "Batería externa 20000 mAh carga rápida 22,5 W", "category": "atributo"},
+  {"query": "cargador portátil VoltEdge", "expected": "Batería externa 20000 mAh carga rápida 22,5 W", "category": "marca"}
+]
