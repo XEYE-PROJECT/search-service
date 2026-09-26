@@ -31,7 +31,14 @@ jobs:
         run: |
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
           pip install --quiet -r requirements-dev.txt
-      - run: pytest -q
+      # Si falla, la cola del log sale como anotación del check (visible sin permisos de admin).
+      - name: pytest
+        run: |
+          set -o pipefail
+          pytest -q -x -p no:cacheprovider 2>&1 | tee pytest.log || {
+            printf '::error title=pytest::%s\n' "$(tail -c 3500 pytest.log | tr '\n' '\r' | sed 's/\r/%0A/g')"
+            exit 1
+          }
 
   build-push:
     needs: [secrets, test]
