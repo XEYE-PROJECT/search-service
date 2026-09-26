@@ -86,7 +86,7 @@ async def invalidate_list(request: Request, list_id: int):
 
 @router.put("/api-keys/{api_key_id}", response_model=InternalAck)
 async def upsert_api_key(request: Request, api_key_id: int, body: ApiKeyUpsertRequest):
-    request.app.state.container.api_keys.upsert(api_key_id, body.user_id, body.api_key)
+    request.app.state.container.api_keys.upsert(api_key_id, body.user_id, body.resolved_hash())
     return InternalAck(message=f"api key {api_key_id} upserted")
 
 

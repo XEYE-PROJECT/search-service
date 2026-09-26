@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.core.security import hash_api_key
 
 # --------------------------------------------------------------------------- pública --
 
@@ -94,10 +96,26 @@ class ListMetaUpdateRequest(BaseModel):
 
 
 class ApiKeyUpsertRequest(BaseModel):
+    """Alta/actualización de una key: el backend manda su SHA-256 (``keyHash``), nunca el valor.
+
+    ``apiKey`` (en claro) se acepta de forma transitoria para backends anteriores a las keys
+    hasheadas; quitarlo cuando el backend con V6 lleve un tiempo en producción.
+    """
+
     model_config = ConfigDict(populate_by_name=True)
 
     user_id: int = Field(alias="userId")
-    api_key: str = Field(alias="apiKey")
+    key_hash: str | None = Field(default=None, alias="keyHash", pattern=r"^[0-9a-f]{64}$")
+    api_key: str | None = Field(default=None, alias="apiKey", min_length=1)
+
+    @model_validator(mode="after")
+    def _require_a_key(self) -> "ApiKeyUpsertRequest":
+        if not self.key_hash and not self.api_key:
+            raise ValueError("keyHash is required")
+        return self
+
+    def resolved_hash(self) -> str:
+        return self.key_hash or hash_api_key(self.api_key or "")
 
 
 class HealthResponse(BaseModel):

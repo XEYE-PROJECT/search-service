@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from app.application.ports import ListDataPayload
+from app.core.security import hash_api_key
 from app.domain.models import ListMeta
 from tests.conftest import FakeEmbedder, embeddings_b64, make_container, make_settings
 
@@ -28,7 +29,7 @@ def camera_payload(list_id: int = 5, texts: list[str] | None = None, name: str =
 
 @pytest.fixture
 def seeded_backend(backend):
-    backend.api_keys = [(1, 10, API_KEY)]
+    backend.api_keys = [(1, 10, hash_api_key(API_KEY))]  # el backend solo manda hashes
     backend.lists = [
         ListMeta(id=5, user_id=10, name="Cámaras", is_public=True),
         ListMeta(id=6, user_id=10, name="Privada", is_public=False),
@@ -198,6 +199,28 @@ class TestInternalApi:
             await ready_client.post("/v1/lists/5/invalidate", headers=INTERNAL)
         ).status_code == 200
 
+    async def test_internal_rejects_wrong_or_partial_token(self, ready_client):
+        for token in ("nope", "test-toke", "test-token ", "TEST-TOKEN", ""):
+            response = await ready_client.post(
+                "/v1/lists/5/invalidate", headers={"X-Internal-Token": token}
+            )
+            assert response.status_code == 403, token
+            assert response.json()["error"] == "Token interno inválido"
+
+    async def test_internal_fails_closed_with_blank_configured_token(self, seeded_backend, seeded_embedder):
+        import httpx
+
+        from app.main import create_app
+
+        settings = make_settings(internal_token="   ")
+        container = make_container(settings, seeded_backend, seeded_embedder)
+        app = create_app(settings=settings, container=container)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            for token in ("   ", ""):
+                response = await client.post("/v1/lists/5/invalidate", headers={"X-Internal-Token": token})
+                assert response.status_code == 403
+
     async def test_index_push_serves_search_without_lazy_load(self, ready_client, container, seeded_backend):
         push = {
             "listId": 7,
@@ -269,15 +292,31 @@ class TestInternalApi:
     async def test_api_key_upsert_and_delete(self, ready_client):
         await ready_client.put(
             "/v1/api-keys/9", headers=INTERNAL,
-            json={"userId": 10, "apiKey": "xeye_new-key"},
+            json={"userId": 10, "keyHash": hash_api_key("xeye_new-key")},
         )
         assert (await search(ready_client, "camara", key="xeye_new-key")).status_code == 200
         await ready_client.delete("/v1/api-keys/9", headers=INTERNAL)
         assert (await search(ready_client, "camara", key="xeye_new-key")).status_code == 401
 
+    async def test_api_key_upsert_accepts_transitional_raw_key(self, ready_client):
+        # Backend anterior a las keys hasheadas: manda apiKey en claro y se hashea aquí.
+        await ready_client.put(
+            "/v1/api-keys/9", headers=INTERNAL,
+            json={"userId": 10, "apiKey": "xeye_legacy-key"},
+        )
+        assert (await search(ready_client, "camara", key="xeye_legacy-key")).status_code == 200
+
+    async def test_api_key_upsert_rejects_malformed_hash(self, ready_client):
+        response = await ready_client.put(
+            "/v1/api-keys/9", headers=INTERNAL, json={"userId": 10, "keyHash": "not-a-sha256"}
+        )
+        assert response.status_code == 422
+        response = await ready_client.put("/v1/api-keys/9", headers=INTERNAL, json={"userId": 10})
+        assert response.status_code == 422
+
     async def test_user_delete_drops_keys_and_lists(self, ready_client, container):
         await ready_client.delete("/v1/users/10", headers=INTERNAL)
-        assert container.api_keys.resolve(API_KEY) is None
+        assert container.api_keys.resolve_raw(API_KEY) is None
         assert container.lists.get(5) is None
 
     async def test_health_reports_state(self, ready_client, container):
@@ -286,3 +325,32 @@ class TestInternalApi:
         assert body["ready"] is True
         assert body["lists_cached"] == 1
         assert body["cache_bytes"] > 0
+
+
+class TestProbesAndDocs:
+    async def test_ready_reports_503_until_bootstrapped(self, client, container):
+        assert (await client.get("/health")).status_code == 200
+        response = await client.get("/ready")
+        assert response.status_code == 503
+        assert response.json()["status"] == "starting"
+
+    async def test_ready_reports_200_once_bootstrapped(self, ready_client):
+        response = await ready_client.get("/ready")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
+
+    async def test_docs_only_in_development(self, ready_client, seeded_backend, seeded_embedder):
+        import httpx
+
+        from app.main import create_app
+
+        assert (await ready_client.get("/openapi.json")).status_code == 200  # development
+
+        settings = make_settings(environment="production", internal_token="p" * 40)
+        container = make_container(settings, seeded_backend, seeded_embedder)
+        app = create_app(settings=settings, container=container)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as prod_client:
+            for path in ("/docs", "/redoc", "/openapi.json"):
+                assert (await prod_client.get(path)).status_code == 404, path
+            assert (await prod_client.get("/health")).status_code == 200

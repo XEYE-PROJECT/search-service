@@ -6,6 +6,7 @@ import pytest
 
 from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog
 from app.application.ports import BootstrapData
+from app.core.security import hash_api_key
 from app.domain.models import ListMeta
 from app.infrastructure.embeddings import ModelRegistry
 from app.infrastructure.list_cache import ListDataCache
@@ -54,7 +55,7 @@ async def test_index_push_during_load_is_not_overwritten():
 
 async def test_catalog_refresh_discards_stale_snapshot():
     backend = FakeBackend()
-    backend.api_keys = [(1, 10, "revoked-key")]
+    backend.api_keys = [(1, 10, hash_api_key("revoked-key"))]
     api_keys, lists = ApiKeyStore(), ListCatalog()
     service = CatalogService(backend, api_keys, lists, min_refresh_interval=0)
 
@@ -76,13 +77,13 @@ async def test_catalog_refresh_discards_stale_snapshot():
     proceed.set()
     await task
     # El snapshot caduco no debe resucitar la key revocada (en su lugar se refetchea).
-    assert api_keys.resolve("revoked-key") is None
+    assert api_keys.resolve_raw("revoked-key") is None
     assert service.ready
 
 
 async def test_refresh_on_miss_reports_concurrent_refresh():
     backend = FakeBackend()
-    backend.api_keys = [(1, 10, "new-key")]
+    backend.api_keys = [(1, 10, hash_api_key("new-key"))]
     service = CatalogService(backend, ApiKeyStore(), ListCatalog(), min_refresh_interval=999)
     # Dos misses concurrentes: una sola llamada de bootstrap, pero a AMBOS llamantes se
     # les debe decir que hubo refresh para que re-resuelvan la key.

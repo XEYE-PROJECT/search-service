@@ -2,6 +2,7 @@
 
 Auth: el secreto compartido X-Internal-Token; X-Internal-Service nos identifica en sus
 logs. Todos los payloads van en camelCase (los defaults de Jackson en el backend).
+Las API keys llegan como hash SHA-256 (``keyHash``), nunca en claro.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import logging
 import httpx
 
 from app.application.ports import BootstrapData, ListDataPayload, LogEntry
+from app.core.security import hash_api_key
 from app.domain.models import ListMeta
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ class BackendClient:
         response.raise_for_status()
         body = response.json()
         api_keys = [
-            (entry["id"], entry["userId"], entry["apiKey"])
+            (entry["id"], entry["userId"], _key_hash(entry))
             for entry in body.get("apiKeys", [])
         ]
         lists = [
@@ -93,3 +95,13 @@ class BackendClient:
         }
         response = await self._http.post("/internal/search/logs", json=payload)
         response.raise_for_status()
+
+
+def _key_hash(entry: dict) -> str:
+    """``keyHash`` del backend actual. Transitorio: un backend anterior a las keys hasheadas
+    aún manda ``apiKey`` en claro; se hashea aquí para que el orden de despliegue no importe.
+    Quitar el fallback cuando el backend con V6 lleve un tiempo en producción."""
+    key_hash = entry.get("keyHash")
+    if key_hash:
+        return str(key_hash)
+    return hash_api_key(str(entry["apiKey"]))

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ApiKeyInfo:
-    """Resolución de una API key en crudo: a quién pertenece."""
+    """Resolución de una API key (por su hash): a quién pertenece."""
 
     id: int
     user_id: int

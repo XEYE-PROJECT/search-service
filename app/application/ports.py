@@ -15,7 +15,7 @@ from app.domain.models import ListMeta
 class BootstrapData:
     """Snapshot que sirve el backend en el arranque / refresh completo."""
 
-    api_keys: list[tuple[int, int, str]]  # (id, user_id, raw_key)
+    api_keys: list[tuple[int, int, str]]  # (id, user_id, key_hash) — SHA-256 hex, nunca en claro
     lists: list[ListMeta]
     # Modelos con los que pueden lanzarse entrenamientos — se precalientan al arrancar
     # para que la primera búsqueda con cada uno no pague la carga/descarga.

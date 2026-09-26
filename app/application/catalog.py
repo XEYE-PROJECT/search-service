@@ -1,4 +1,4 @@
-"""Catálogos en RAM: API keys (auth) y metadatos de listas (nombres + gate de pública).
+"""Catálogos en RAM: API keys (auth, solo hashes) y metadatos de listas (nombres + gate de pública).
 
 Son pequeños: residen completos (sin LRU) y solo mutan en el event loop (sin locks). El
 backend los mantiene frescos por push; el refresh periódico cubre pushes perdidos.
@@ -14,28 +14,42 @@ import logging
 import time
 
 from app.application.ports import BackendGateway
+from app.core.security import hash_api_key
 from app.domain.models import ApiKeyInfo, ListMeta
 
 logger = logging.getLogger(__name__)
 
 
 class ApiKeyStore:
+    """Catálogo de API keys indexado por su SHA-256: aquí nunca vive una key en claro.
+
+    El backend envía solo hashes (bootstrap y ``PUT /v1/api-keys/{id}``); la cabecera
+    ``X-API-Key`` de cada búsqueda se hashea con ``hash_api_key`` y se busca tal cual.
+    """
+
     def __init__(self) -> None:
-        self._by_raw: dict[str, ApiKeyInfo] = {}
-        self._raw_by_id: dict[int, str] = {}
+        self._by_hash: dict[str, ApiKeyInfo] = {}
+        self._hash_by_id: dict[int, str] = {}
         self.mutations = 0  # lo suben los cambios por push (no replace_all)
 
-    def resolve(self, raw_key: str) -> ApiKeyInfo | None:
-        return self._by_raw.get(raw_key)
+    def resolve_raw(self, raw_key: str) -> ApiKeyInfo | None:
+        """Resuelve una key tal como llega en la cabecera (en claro)."""
+        return self._by_hash.get(hash_api_key(raw_key))
+
+    def resolve_hash(self, key_hash: str) -> ApiKeyInfo | None:
+        return self._by_hash.get(key_hash)
 
     def replace_all(self, entries: list[tuple[int, int, str]]) -> None:
-        self._by_raw = {raw: ApiKeyInfo(id=key_id, user_id=user_id) for key_id, user_id, raw in entries}
-        self._raw_by_id = {key_id: raw for key_id, user_id, raw in entries}
+        """``entries`` = ``(id, user_id, key_hash)``."""
+        self._by_hash = {
+            key_hash: ApiKeyInfo(id=key_id, user_id=user_id) for key_id, user_id, key_hash in entries
+        }
+        self._hash_by_id = {key_id: key_hash for key_id, user_id, key_hash in entries}
 
-    def upsert(self, key_id: int, user_id: int, raw_key: str) -> None:
+    def upsert(self, key_id: int, user_id: int, key_hash: str) -> None:
         self._remove_only(key_id)
-        self._by_raw[raw_key] = ApiKeyInfo(id=key_id, user_id=user_id)
-        self._raw_by_id[key_id] = raw_key
+        self._by_hash[key_hash] = ApiKeyInfo(id=key_id, user_id=user_id)
+        self._hash_by_id[key_id] = key_hash
         self.mutations += 1
 
     def remove(self, key_id: int) -> None:
@@ -43,17 +57,17 @@ class ApiKeyStore:
         self.mutations += 1
 
     def remove_user(self, user_id: int) -> None:
-        for key_id in [k.id for k in self._by_raw.values() if k.user_id == user_id]:
+        for key_id in [k.id for k in self._by_hash.values() if k.user_id == user_id]:
             self._remove_only(key_id)
         self.mutations += 1
 
     def _remove_only(self, key_id: int) -> None:
-        raw = self._raw_by_id.pop(key_id, None)
-        if raw is not None:
-            self._by_raw.pop(raw, None)
+        key_hash = self._hash_by_id.pop(key_id, None)
+        if key_hash is not None:
+            self._by_hash.pop(key_hash, None)
 
     def __len__(self) -> int:
-        return len(self._by_raw)
+        return len(self._by_hash)
 
 
 class ListCatalog:
