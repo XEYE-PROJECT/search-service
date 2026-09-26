@@ -20,8 +20,8 @@ app/
 ### Flujo de datos
 
 - **Arranque**: `GET {backend}/internal/search/bootstrap` carga *solo* los catálogos
-  ligeros (API keys en crudo, metadatos de listas y los modelos de embeddings
-  disponibles). Si el backend está caído se reintenta con backoff; el servicio arranca
+  ligeros (los **hashes SHA-256** de las API keys —aquí nunca vive una key en claro—,
+  metadatos de listas y los modelos de embeddings disponibles). Si el backend está caído se reintenta con backoff; el servicio arranca
   igualmente. Tras el bootstrap se **precalientan todos** los modelos disponibles (y el
   default desde el primer instante), de modo que la primera búsqueda con cualquier
   modelo no paga su carga/descarga; el re-sync periódico precalienta modelos nuevos.
@@ -63,14 +63,18 @@ app/
 
 ## API
 
-Pública (cabecera `X-API-Key`, rate limit 60/min por key, CORS habilitado):
+Sondas sin auth: `GET /health` (liveness, docker) y `GET /ready` (readiness: 503 hasta que el
+bootstrap contra el backend ha terminado; es la que vigila el monitor de uptime).
+
+Pública (cabecera `X-API-Key`, rate limit 60/min por key, CORS habilitado; la key se hashea y
+se busca en el catálogo):
 
 - `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?, register_log?, allow_private?}`
   → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms}`.
   Solo listas **públicas** del dueño de la key. Errores: `{error, detail}` con 401/403/404/429/503.
 - `POST /api/v1/target` — `{list_name, target_term, session}` → `{success}` (solo auditoría).
 
-Interna (cabecera `X-Internal-Token`, solo el backend):
+Interna (cabecera `X-Internal-Token`, comparada en tiempo constante; solo el backend):
 
 - `POST /v1/lists/{id}/index` · `PUT /v1/lists/{id}/meta` · `DELETE /v1/lists/{id}` ·
   `POST /v1/lists/{id}/invalidate` · `PUT|DELETE /v1/api-keys/{id}` ·
@@ -95,6 +99,16 @@ Variables en `.env.example`. En el backend: `SEARCH_PROVIDER=http`,
 `SEARCH_SERVICE_URL=http://localhost:8002` (o `http://xeye-search-service:8002` en
 docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
 
+## Producción (fallo cerrado)
+
+`ENVIRONMENT=production` es el valor por defecto: el servicio **no arranca** si
+`INTERNAL_TOKEN` está vacío, es el de desarrollo o tiene menos de 32 caracteres, y no expone
+`/docs`, `/redoc` ni `/openapi.json`. En una máquina de desarrollo hay que declarar
+`ENVIRONMENT=development`. `SENTRY_DSN` activa el error tracking (las cabeceras `X-API-Key`
+y `X-Internal-Token` se eliminan de los eventos). El proxy solo publica `/api/v1/*`, `/`,
+`/health` y `/ready`.
+
 Para probar la API a mano hay una colección de [Bruno](https://www.usebruno.com/) en
-`bruno/` (ábrela con "Open Collection" y selecciona el entorno `local`; ajusta ahí
-`apiKey` e `internalToken`).
+`bruno/` (ábrela con "Open Collection" y selecciona el entorno `local`). `apiKey` e
+`internalToken` son *secret vars* del entorno: rellénalas en Bruno, **nunca en un `.bru`**
+(quedaría en git).

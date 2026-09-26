@@ -1,8 +1,11 @@
 vars {
   baseUrl: http://localhost:8002
-  apiKey: cambia-esto-por-una-api-key-real
-  internalToken: dev-internal-token
   listId: 1
   userId: 1
   apiKeyId: 1
+  apiKeyHash: sha256-hex-de-la-api-key
 }
+vars:secret [
+  apiKey,
+  internalToken
+]
