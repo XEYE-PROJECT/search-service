@@ -28,5 +28,9 @@ RUN for m in ${EXTRA_EMBEDDING_MODELS}; do \
 
 COPY app ./app
 
+# Commit desplegado, para etiquetar los eventos de Sentry (lo pasa el workflow con --build-arg).
+ARG GIT_SHA=unknown
+ENV SENTRY_RELEASE=${GIT_SHA}
+
 EXPOSE 8002
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]

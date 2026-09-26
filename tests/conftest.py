@@ -1,9 +1,14 @@
 import asyncio
 import base64
 import io
+import os
 
 import numpy as np
 import pytest
+
+# `app.main` construye la app al importarse con Settings() reales: en producción (el default)
+# exige un INTERNAL_TOKEN fuerte. Los tests son desarrollo, pase lo que pase en el .env local.
+os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog
 from app.application.list_data import ListDataService
@@ -79,6 +84,7 @@ class FakeEmbedder:
 
 def make_settings(**overrides) -> Settings:
     defaults = dict(
+        environment="development",  # producción exige un token interno fuerte
         backend_url="http://backend.test",
         internal_token="test-token",
         refresh_min_interval_seconds=0.0,

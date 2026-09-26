@@ -5,7 +5,36 @@ on:
     branches: [master]
 
 jobs:
+  # Ningún secreto llega al historial: gitleaks sobre todo el repo (binario oficial vía docker;
+  # la action de gitleaks exige licencia en organizaciones, el binario no).
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          ghcr.io/gitleaks/gitleaks:latest git /repo --redact -v --exit-code 1
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install (torch CPU, como en el Dockerfile)
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet -r requirements-dev.txt
+      - run: pytest -q
+
   build-push:
+    needs: [secrets, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,6 +56,8 @@ jobs:
           push: true
           # Sin override de EXTRA_EMBEDDING_MODELS: aplica el default del Dockerfile,
           # que hornea mpnet además de MiniLM (prod ofrece ambos desde 2026-08-06).
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: |
             ghcr.io/xeye-project/search-service:latest
             ghcr.io/xeye-project/search-service:${{ github.sha }}
@@ -42,4 +73,5 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          script: /opt/xeye-infra/deploy.sh search-service
+          # Despliega el commit exacto (no :latest) y falla si el contenedor no llega a healthy.
+          script: /opt/xeye-infra/deploy.sh search-service ${{ github.sha }}

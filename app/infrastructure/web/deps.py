@@ -17,6 +17,7 @@ from app.application.errors import (
     MissingApiKeyError,
     RateLimitedError,
 )
+from app.core.security import constant_time_equals
 from app.domain.models import ApiKeyInfo
 
 
@@ -35,9 +36,9 @@ async def require_api_key(
     if not x_api_key or not x_api_key.strip():
         raise MissingApiKeyError()
     raw = x_api_key.strip()
-    info = container.api_keys.resolve(raw)
+    info = container.api_keys.resolve_raw(raw)
     if info is None and await container.catalog_service.refresh_on_miss():
-        info = container.api_keys.resolve(raw)
+        info = container.api_keys.resolve_raw(raw)
     if info is None:
         raise InvalidApiKeyError()
     if not container.rate_limiter.allow(str(info.id)):
@@ -49,8 +50,9 @@ async def require_internal_token(
     request: Request,
     x_internal_token: Annotated[str | None, Header()] = None,
 ) -> None:
-    # Fail closed: un token configurado en blanco lo rechaza todo en vez de permitirlo
-    # (un despliegue mal configurado no debe exponer la API interna).
-    expected = request.app.state.container.settings.internal_token
-    if not expected or not expected.strip() or x_internal_token != expected:
+    # Comparación en tiempo constante y fallo cerrado: un token configurado en blanco lo
+    # rechaza todo en vez de permitirlo (un despliegue mal configurado no debe exponer la
+    # API interna). En producción, además, Settings no arranca sin un token fuerte.
+    expected = request.app.state.container.settings.internal_token.get_secret_value()
+    if not constant_time_equals(expected, x_internal_token):
         raise InvalidInternalTokenError()

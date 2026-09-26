@@ -48,7 +48,9 @@ def build_container(
     embedder: QueryEmbedder | None = None,
 ) -> Container:
     backend = backend or BackendClient(
-        settings.backend_url, settings.internal_token, timeout=settings.backend_timeout_seconds
+        settings.backend_url,
+        settings.internal_token.get_secret_value(),
+        timeout=settings.backend_timeout_seconds,
     )
     embedder = embedder or ModelRegistry(
         settings.embedding_model_default, settings.models_max_loaded

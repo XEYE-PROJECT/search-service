@@ -6,6 +6,9 @@ reintentos, lanza el re-sync periódico y el consumidor de logs, y precalienta l
 de embedding que anuncia el backend para que ninguna primera búsqueda pague la carga.
 Los datos de búsqueda de cada lista son perezosos: se cargan en la primera búsqueda y
 quedan en la caché LRU en RAM.
+
+Sondas: /health es liveness (el proceso responde) y /ready es readiness (503 hasta que el
+bootstrap contra el backend ha terminado): la que debe vigilar un monitor externo.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +30,38 @@ from app.infrastructure.web.internal_router import router as internal_router
 from app.infrastructure.web.public_router import router as public_router
 
 logger = logging.getLogger(__name__)
+
+#: Cabeceras que nunca deben salir hacia Sentry aunque el SDK capture la petición.
+_SENSITIVE_HEADERS = frozenset({"x-api-key", "x-internal-token", "authorization", "cookie"})
+
+
+def _scrub_sensitive_headers(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+    request = event.get("request")
+    if isinstance(request, dict) and isinstance(request.get("headers"), dict):
+        request["headers"] = {
+            name: value
+            for name, value in request["headers"].items()
+            if name.lower() not in _SENSITIVE_HEADERS
+        }
+    return event
+
+
+def _init_sentry(settings: Settings) -> None:
+    """Error tracking opcional: solo con SENTRY_DSN. Import perezoso para no exigir el SDK en dev."""
+    if not settings.sentry_dsn:
+        return
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=settings.sentry_release or None,
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+        before_send=_scrub_sensitive_headers,
+    )
+    logger.info("Sentry enabled (environment=%s, release=%s)",
+                settings.environment, settings.sentry_release or "-")
 
 
 async def _preload_available_models(container: Container) -> None:
@@ -71,14 +107,6 @@ async def lifespan(app: FastAPI):
     container: Container = app.state.container_override or build_container(settings)
     app.state.container = container
 
-    if not settings.internal_token.strip() or settings.internal_token == "dev-internal-token":
-        logger.warning(
-            "INTERNAL_TOKEN is %s — the /v1/* internal API is effectively unprotected. "
-            "Set a strong shared secret (and the same SEARCH_INTERNAL_TOKEN on the backend) "
-            "before exposing this service.",
-            "blank" if not settings.internal_token.strip() else "the dev default",
-        )
-
     tasks = [
         asyncio.create_task(_bootstrap_with_retry(container), name="bootstrap"),
         asyncio.create_task(container.log_queue.run(), name="log-consumer"),
@@ -108,11 +136,17 @@ async def lifespan(app: FastAPI):
 def create_app(settings: Settings | None = None, container: Container | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
+    _init_sentry(settings)
 
+    # Swagger/OpenAPI solo en desarrollo: en producción el esquema (que incluye la API
+    # interna) no existe, ni siquiera detrás del proxy.
     app = FastAPI(
         title=settings.service_name,
         version=settings.service_version,
         lifespan=lifespan,
+        docs_url="/docs" if settings.docs_enabled else None,
+        redoc_url="/redoc" if settings.docs_enabled else None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
     app.state.settings = settings
     app.state.container_override = container
@@ -145,7 +179,19 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     @app.get("/health", tags=["meta"])
     async def health():
+        """Liveness: el proceso atiende. Lo usa el healthcheck de docker."""
         return {"status": "ok"}
+
+    @app.get("/ready", tags=["meta"])
+    async def ready(request: Request):
+        """Readiness: 200 solo con los catálogos cargados desde el backend (si no, 503).
+        Es la sonda para el monitor de uptime externo."""
+        current = getattr(request.app.state, "container", None)
+        is_ready = current is not None and current.catalog_service.ready
+        return JSONResponse(
+            status_code=200 if is_ready else 503,
+            content={"status": "ready" if is_ready else "starting"},
+        )
 
     app.include_router(public_router)
     app.include_router(internal_router)

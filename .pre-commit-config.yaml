@@ -1,0 +1,7 @@
+# Instalar una vez por clon: `pipx install pre-commit && pre-commit install`.
+# Bloquea el commit si gitleaks detecta un secreto en los ficheros staged.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks

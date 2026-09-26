@@ -8,3 +8,4 @@ numpy>=1.26,<3.0
 faiss-cpu>=1.8,<2.0
 rapidfuzz>=3.9,<4.0
 sentence-transformers>=3.0,<6.0
+sentry-sdk[fastapi]>=2.20,<3.0
