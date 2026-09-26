@@ -131,7 +131,9 @@ class CatalogService:
         self.lists = lists
         self._min_refresh_interval = min_refresh_interval
         self._refresh_lock = asyncio.Lock()
-        self._last_refresh = 0.0
+        # None = nunca refrescado. (No usar 0.0: time.monotonic() cuenta desde el arranque de la
+        # máquina y en una recién encendida el throttle se saltaría el primer refresh.)
+        self._last_refresh: float | None = None
         self._refreshes_applied = 0
         self.ready = False
         # Modelos de embedding disponibles según el último bootstrap (se precalientan al
@@ -152,7 +154,10 @@ class CatalogService:
         async with self._refresh_lock:
             if self._refreshes_applied != applied_before:
                 return True  # otro refrescó mientras esperábamos
-            if time.monotonic() - self._last_refresh < self._min_refresh_interval:
+            if (
+                self._last_refresh is not None
+                and time.monotonic() - self._last_refresh < self._min_refresh_interval
+            ):
                 return False
             try:
                 await self._refresh_locked()
