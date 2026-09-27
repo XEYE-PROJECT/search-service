@@ -21,7 +21,9 @@ app/
 
 - **Arranque**: `GET {backend}/internal/search/bootstrap` carga *solo* los catálogos
   ligeros (los **hashes SHA-256** de las API keys —aquí nunca vive una key en claro—,
-  metadatos de listas y los modelos de embeddings disponibles). Si el backend está caído se reintenta con backoff; el servicio arranca
+  metadatos de listas y los modelos de embeddings disponibles), por páginas de clave: si el
+  backend responde `apiKeysNextAfterId`/`listsNextAfterId`, el cliente sigue con
+  `/internal/search/api-keys|lists?afterId=` hasta agotar. Si el backend está caído se reintenta con backoff; el servicio arranca
   igualmente. Tras el bootstrap se **precalientan todos** los modelos disponibles (y el
   default desde el primer instante), de modo que la primera búsqueda con cualquier
   modelo no paga su carga/descarga; el re-sync periódico precalienta modelos nuevos.

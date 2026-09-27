@@ -17,6 +17,9 @@ from app.domain.models import ListMeta
 
 logger = logging.getLogger(__name__)
 
+# Tamaño de página del snapshot de arranque (el backend admite hasta 5000).
+BOOTSTRAP_PAGE = 1000
+
 
 class BackendClient:
     def __init__(self, base_url: str, internal_token: str, timeout: float = 30.0) -> None:
@@ -33,13 +36,17 @@ class BackendClient:
         await self._http.aclose()
 
     async def fetch_bootstrap(self) -> BootstrapData:
-        response = await self._http.get("/internal/search/bootstrap")
+        """El bootstrap trae la primera página (id ascendente) de api keys y de listas; si el
+        backend indica ``apiKeysNextAfterId`` / ``listsNextAfterId`` se siguen pidiendo páginas
+        por clave a ``/internal/search/api-keys`` y ``/internal/search/lists``."""
+        response = await self._http.get("/internal/search/bootstrap", params={"limit": BOOTSTRAP_PAGE})
         response.raise_for_status()
         body = response.json()
-        api_keys = [
-            (entry["id"], entry["userId"], _key_hash(entry))
-            for entry in body.get("apiKeys", [])
-        ]
+        api_key_entries = list(body.get("apiKeys", []))
+        api_key_entries += await self._fetch_keyset_pages("/internal/search/api-keys", body.get("apiKeysNextAfterId"))
+        list_entries = list(body.get("lists", []))
+        list_entries += await self._fetch_keyset_pages("/internal/search/lists", body.get("listsNextAfterId"))
+        api_keys = [(entry["id"], entry["userId"], _key_hash(entry)) for entry in api_key_entries]
         lists = [
             ListMeta(
                 id=entry["id"],
@@ -47,7 +54,7 @@ class BackendClient:
                 name=entry["name"],
                 is_public=bool(entry.get("isPublic", False)),
             )
-            for entry in body.get("lists", [])
+            for entry in list_entries
         ]
         embedding_models = [
             name for name in body.get("embeddingModels") or [] if isinstance(name, str) and name.strip()
@@ -60,6 +67,18 @@ class BackendClient:
         return BootstrapData(
             api_keys=api_keys, lists=lists, embedding_models=embedding_models, user_limits=user_limits
         )
+
+    async def _fetch_keyset_pages(self, path: str, next_after_id: int | None) -> list[dict]:
+        """Recorre ``{items, nextAfterId}`` hasta que ``nextAfterId`` sea nulo."""
+        entries: list[dict] = []
+        after_id = next_after_id
+        while after_id is not None:
+            response = await self._http.get(path, params={"afterId": after_id, "limit": BOOTSTRAP_PAGE})
+            response.raise_for_status()
+            page = response.json()
+            entries.extend(page.get("items") or [])
+            after_id = page.get("nextAfterId")
+        return entries
 
     async def fetch_list_data(self, list_id: int) -> ListDataPayload | None:
         response = await self._http.get(f"/internal/search/lists/{list_id}")
