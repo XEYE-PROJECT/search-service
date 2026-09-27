@@ -83,22 +83,68 @@ class Settings(BaseSettings):
         return not self.is_production
 
     @model_validator(mode="after")
-    def _require_strong_internal_token_in_production(self) -> "Settings":
+    def _fail_fast_in_production(self) -> "Settings":
+        """Fallo cerrado: en producción ningún valor de desarrollo pasa del arranque.
+
+        Cada problema nombra la variable de entorno para que `docker compose logs` diga qué
+        arreglar. Se acumulan todos en un único error en vez de fallar uno a uno.
+        """
         if not self.is_production:
             return self
+        problems: list[str] = []
+
         token = self.internal_token.get_secret_value().strip()
         if not token:
-            raise ValueError("INTERNAL_TOKEN must be set in production (the internal API fails closed)")
-        if token.lower() in INSECURE_INTERNAL_TOKENS:
-            raise ValueError(
+            problems.append("INTERNAL_TOKEN must be set in production (the internal API fails closed)")
+        elif token.lower() in INSECURE_INTERNAL_TOKENS:
+            problems.append(
                 "INTERNAL_TOKEN is a known development value; generate one with `openssl rand -hex 32` "
                 "(or set ENVIRONMENT=development on a dev machine)"
             )
-        if len(token) < MIN_INTERNAL_TOKEN_LENGTH:
-            raise ValueError(
+        elif len(token) < MIN_INTERNAL_TOKEN_LENGTH:
+            problems.append(
                 f"INTERNAL_TOKEN must be at least {MIN_INTERNAL_TOKEN_LENGTH} characters in production"
             )
+
+        # La API pública la llama el navegador desde la consola: solo orígenes https reales.
+        if not self.cors_origin_list:
+            problems.append("CORS_ORIGINS must list the console origins (https://xeye.es,...)")
+        for origin in self.cors_origin_list:
+            if not origin.startswith("https://"):
+                problems.append(f"CORS_ORIGINS must contain only https:// origins (found '{origin}')")
+            elif is_local_host(origin):
+                problems.append(f"CORS_ORIGINS must not contain localhost origins in production (found '{origin}')")
+
+        # Dentro del contenedor, localhost es el propio contenedor: el backend nunca está ahí.
+        if not self.backend_url.startswith(("http://", "https://")):
+            problems.append(f"BACKEND_URL must be an http(s) URL (found '{self.backend_url}')")
+        elif is_local_host(self.backend_url):
+            problems.append(
+                "BACKEND_URL must point to the backend over the docker network "
+                f"(http://xeye-backend:8000), not localhost (found '{self.backend_url}')"
+            )
+
+        if self.rate_limit_per_minute <= 0:
+            problems.append("RATE_LIMIT_PER_MINUTE must be > 0 in production")
+
+        if problems:
+            raise ValueError("Unsafe production configuration:\n - " + "\n - ".join(problems))
         return self
+
+
+def is_local_host(url: str) -> bool:
+    """``localhost``, ``127.0.0.1``, ``0.0.0.0`` o ``[::1]`` como host de una URL u origen."""
+    rest = url.strip().lower()
+    if "://" in rest:
+        rest = rest.split("://", 1)[1]
+    for stop in "/?#":
+        rest = rest.split(stop, 1)[0]
+    host = rest.rsplit("@", 1)[-1]
+    if host.startswith("["):
+        host = host[1:].split("]", 1)[0]
+    else:
+        host = host.split(":", 1)[0]
+    return host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or host.endswith(".localhost")
 
 
 @lru_cache

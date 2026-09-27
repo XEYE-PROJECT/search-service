@@ -91,6 +91,9 @@ def make_settings(**overrides) -> Settings:
         log_flush_seconds=0.05,
         rate_limit_per_minute=1000,
     )
+    if overrides.get("environment") == "production":
+        # Lo que un env de producción válido lleva además del token (CORS https, backend no-localhost).
+        defaults["cors_origins"] = "https://xeye.es"
     defaults.update(overrides)
     return Settings(_env_file=None, **defaults)
 

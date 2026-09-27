@@ -95,15 +95,18 @@ pytest
 docker compose up --build
 ```
 
-Variables en `.env.example`. En el backend: `SEARCH_PROVIDER=http`,
+Variables en `.env.example`; referencia completa con lo **obligatorio en producción** en
+[CONFIG.md](CONFIG.md). En el backend: `SEARCH_PROVIDER=http`,
 `SEARCH_SERVICE_URL=http://localhost:8002` (o `http://xeye-search-service:8002` en
 docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
 
 ## Producción (fallo cerrado)
 
 `ENVIRONMENT=production` es el valor por defecto: el servicio **no arranca** si
-`INTERNAL_TOKEN` está vacío, es el de desarrollo o tiene menos de 32 caracteres, y no expone
-`/docs`, `/redoc` ni `/openapi.json`. En una máquina de desarrollo hay que declarar
+`INTERNAL_TOKEN` está vacío, es el de desarrollo o tiene menos de 32 caracteres, si algún
+`CORS_ORIGINS` no es `https://` o es `localhost`, si `BACKEND_URL` apunta a `localhost` (dentro
+del contenedor sería él mismo) o si `RATE_LIMIT_PER_MINUTE` es 0; el error de arranque lista
+todos los problemas nombrando la variable. Tampoco expone `/docs`, `/redoc` ni `/openapi.json`. En una máquina de desarrollo hay que declarar
 `ENVIRONMENT=development`. `SENTRY_DSN` activa el error tracking (las cabeceras `X-API-Key`
 y `X-Internal-Token` se eliminan de los eventos). El proxy solo publica `/api/v1/*`, `/`,
 `/health` y `/ready`.

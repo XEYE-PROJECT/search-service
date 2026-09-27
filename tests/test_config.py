@@ -3,11 +3,16 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import MIN_INTERNAL_TOKEN_LENGTH, Settings
+from app.core.config import MIN_INTERNAL_TOKEN_LENGTH, Settings, is_local_host
 from app.core.security import constant_time_equals, hash_api_key
+
+#: Lo que un env de producción válido tiene además del token (ver xeye-infra/env/search.env.example).
+PROD_OK = dict(cors_origins="https://xeye.es,https://www.xeye.es", backend_url="http://xeye-backend:8000")
 
 
 def settings(**overrides) -> Settings:
+    if overrides.get("environment") == "production":
+        overrides = {**PROD_OK, **overrides}
     return Settings(_env_file=None, **overrides)
 
 
@@ -36,6 +41,46 @@ def test_development_accepts_the_dev_token_and_enables_docs():
     cfg = settings(environment="development")
     assert cfg.internal_token.get_secret_value() == "dev-internal-token"
     assert cfg.docs_enabled
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "variable"),
+    [
+        ("cors_origins", "", "CORS_ORIGINS"),
+        ("cors_origins", "https://xeye.es,http://xeye.es", "CORS_ORIGINS"),
+        ("cors_origins", "https://xeye.es,https://localhost:3000", "CORS_ORIGINS"),
+        ("backend_url", "http://localhost:8000", "BACKEND_URL"),
+        ("backend_url", "http://127.0.0.1:8000", "BACKEND_URL"),
+        ("backend_url", "xeye-backend:8000", "BACKEND_URL"),
+        ("rate_limit_per_minute", 0, "RATE_LIMIT_PER_MINUTE"),
+    ],
+)
+def test_production_rejects_dev_urls_and_origins(field, value, variable):
+    with pytest.raises(ValidationError, match=variable):
+        settings(environment="production", internal_token="a" * 48, **{field: value})
+
+
+def test_production_reports_every_problem_at_once():
+    with pytest.raises(ValidationError) as info:
+        settings(environment="production", internal_token="short", cors_origins="http://localhost:3000",
+                 backend_url="http://localhost:8000")
+    message = str(info.value)
+    assert "INTERNAL_TOKEN" in message and "CORS_ORIGINS" in message and "BACKEND_URL" in message
+
+
+def test_development_accepts_localhost_everywhere():
+    cfg = settings(environment="development")  # defaults: CORS y backend en localhost
+    assert cfg.backend_url.startswith("http://localhost")
+
+
+def test_is_local_host():
+    assert is_local_host("http://localhost:8000")
+    assert is_local_host("https://user@127.0.0.1/x?y")
+    assert is_local_host("http://[::1]:8000")
+    assert is_local_host("https://app.localhost")
+    assert not is_local_host("http://xeye-backend:8000")
+    assert not is_local_host("https://xeye.es/localhost")
+    assert not is_local_host("https://localhost.xeye.es")
 
 
 def test_hash_api_key_matches_the_backend_format():
