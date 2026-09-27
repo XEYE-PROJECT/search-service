@@ -1,4 +1,5 @@
-"""Catálogos en RAM: API keys (auth, solo hashes) y metadatos de listas (nombres + gate de pública).
+"""Catálogos en RAM: API keys (auth, solo hashes), metadatos de listas (nombres + gate de
+pública) y límites de búsqueda por usuario (los que difieren del plan por defecto).
 
 Son pequeños: residen completos (sin LRU) y solo mutan en el event loop (sin locks). El
 backend los mantiene frescos por push; el refresh periódico cubre pushes perdidos.
@@ -70,6 +71,38 @@ class ApiKeyStore:
         return len(self._by_hash)
 
 
+class UserLimits:
+    """Búsquedas/minuto por usuario fijadas desde el backend (admin). Solo guarda las que
+    difieren del valor por defecto (``RATE_LIMIT_PER_MINUTE``); todas las keys del usuario y
+    las búsquedas desde la consola comparten ese cupo."""
+
+    def __init__(self) -> None:
+        self._by_user: dict[int, int] = {}
+        self.mutations = 0  # lo suben los cambios por push (no replace_all)
+
+    def get(self, user_id: int, default: int) -> int:
+        return self._by_user.get(user_id, default)
+
+    def replace_all(self, entries: list[tuple[int, int]]) -> None:
+        """``entries`` = ``(user_id, rate_limit_per_minute)``."""
+        self._by_user = {user_id: limit for user_id, limit in entries}
+
+    def set(self, user_id: int, limit: int | None) -> None:
+        """``None`` (o un valor no positivo) vuelve al límite por defecto."""
+        if limit is None or limit <= 0:
+            self._by_user.pop(user_id, None)
+        else:
+            self._by_user[user_id] = limit
+        self.mutations += 1
+
+    def remove_user(self, user_id: int) -> None:
+        self._by_user.pop(user_id, None)
+        self.mutations += 1
+
+    def __len__(self) -> int:
+        return len(self._by_user)
+
+
 class ListCatalog:
     def __init__(self) -> None:
         self._by_id: dict[int, ListMeta] = {}
@@ -124,11 +157,13 @@ class CatalogService:
         api_keys: ApiKeyStore,
         lists: ListCatalog,
         *,
+        user_limits: UserLimits | None = None,
         min_refresh_interval: float = 30.0,
     ) -> None:
         self._backend = backend
         self.api_keys = api_keys
         self.lists = lists
+        self.user_limits = user_limits if user_limits is not None else UserLimits()
         self._min_refresh_interval = min_refresh_interval
         self._refresh_lock = asyncio.Lock()
         # None = nunca refrescado. (No usar 0.0: time.monotonic() cuenta desde el arranque de la
@@ -168,18 +203,20 @@ class CatalogService:
 
     async def _refresh_locked(self) -> None:
         for _attempt in range(self._MAX_REFRESH_ATTEMPTS):
-            marker = self.api_keys.mutations + self.lists.mutations
+            marker = self._mutation_marker()
             snapshot = await self._backend.fetch_bootstrap()
-            if self.api_keys.mutations + self.lists.mutations != marker:
+            if self._mutation_marker() != marker:
                 continue  # un push llegó en pleno fetch; el snapshot puede ser anterior — refetch
             self.api_keys.replace_all(snapshot.api_keys)
             self.lists.replace_all(snapshot.lists)
+            self.user_limits.replace_all(snapshot.user_limits)
             self.embedding_models = list(snapshot.embedding_models)
             self._last_refresh = time.monotonic()
             self._refreshes_applied += 1
             self.ready = True
             logger.info(
-                "Catalog refreshed: %d api keys, %d lists", len(self.api_keys), len(self.lists)
+                "Catalog refreshed: %d api keys, %d lists, %d user limits",
+                len(self.api_keys), len(self.lists), len(self.user_limits),
             )
             return
         # Siguieron llegando pushes en pleno fetch: esos mismos pushes mantienen fresco el
@@ -187,3 +224,6 @@ class CatalogService:
         self._last_refresh = time.monotonic()
         logger.warning("Catalog refresh skipped after %d attempts (concurrent updates)",
                        self._MAX_REFRESH_ATTEMPTS)
+
+    def _mutation_marker(self) -> int:
+        return self.api_keys.mutations + self.lists.mutations + self.user_limits.mutations

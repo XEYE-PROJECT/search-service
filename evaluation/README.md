@@ -48,7 +48,7 @@ python -m evaluation.evaluate --list Productos --api-key xeye_... \
     --backend-url https://backend.xeye.es --email tu@correo --password ...
 ```
 
-Flags útiles: `--allow-private` (listas privadas propias), `--limit` (resultados por
+La lista evaluada debe ser **pública** (la API solo sirve públicas). Flags útiles: `--limit` (resultados por
 consulta, def. 50), `--dataset` (fichero alternativo), `--qpm` (def. 55; el servicio corta a
 60 req/min por API key y el script espacia y reintenta los 429). La API key puede ir en la
 variable de entorno `XEYE_API_KEY`.

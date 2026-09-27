@@ -75,26 +75,33 @@ class SearchUseCase:
         self._log_queue = log_queue
         self._scoring = scoring
 
-    async def resolve_public_list(
-        self, user_id: int, list_name: str, *, allow_private: bool = False
-    ) -> ListMeta:
-        """La lista del llamante por nombre exacto; debe existir y ser pública (la API
-        pública solo sirve listas públicas, como en el contrato del servicio original).
-        ``allow_private`` (el buscador del frontend) lo salta: la key ya limita al dueño,
-        así que solo abre las listas privadas del propio llamante."""
+    async def resolve_public_list(self, user_id: int, list_name: str) -> ListMeta:
+        """La lista del dueño de la key por nombre exacto; debe existir y ser PÚBLICA. La
+        visibilidad la decide el propietario desde la consola, nunca el cliente de la API: las
+        listas privadas solo se buscan desde la consola (``resolve_list_by_id``, vía backend)."""
         meta = self._catalogs.lists.resolve(user_id, list_name)
         if meta is None and await self._catalogs.refresh_on_miss():
             meta = self._catalogs.lists.resolve(user_id, list_name)
         if meta is None:
             raise ListNotFoundError(list_name)
-        if not meta.is_public and not allow_private:
+        if not meta.is_public:
             raise ListNotPublicError(list_name)
+        return meta
+
+    async def resolve_list_by_id(self, list_id: int) -> ListMeta:
+        """Cualquier lista por id, pública o privada: la usa la API interna para la consola,
+        donde el backend ya ha comprobado la propiedad con la sesión del usuario."""
+        meta = self._catalogs.lists.get(list_id)
+        if meta is None and await self._catalogs.refresh_on_miss():
+            meta = self._catalogs.lists.get(list_id)
+        if meta is None:
+            raise ListNotFoundError(list_id)
         return meta
 
     async def search(
         self,
         meta: ListMeta,
-        auth: ApiKeyInfo,
+        auth: ApiKeyInfo | None,  # None = búsqueda desde la consola (sin API key)
         search_term: str,
         limit: int,
         *,
@@ -268,7 +275,7 @@ class SearchUseCase:
     def _enqueue_log(
         self,
         meta: ListMeta,
-        auth: ApiKeyInfo,
+        auth: ApiKeyInfo | None,
         endpoint: str,
         term: str,
         *,
@@ -279,7 +286,7 @@ class SearchUseCase:
     ) -> None:
         entry = LogEntry(
             user_id=meta.user_id,
-            api_key_id=auth.id,
+            api_key_id=auth.id if auth is not None else None,
             list_id=meta.id,
             list_name=meta.name,
             endpoint=endpoint,

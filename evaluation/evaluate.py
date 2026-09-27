@@ -46,9 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=50, help="resultados pedidos por consulta")
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--qpm", type=int, default=55,
-                        help="consultas/minuto máx. (el servicio corta a 60 por key)")
-    parser.add_argument("--allow-private", action="store_true",
-                        help="permite buscar en listas privadas propias")
+                        help="consultas/minuto máx. (el servicio corta por usuario: 60/min por defecto)")
     parser.add_argument("--label", default=None,
                         help="etiqueta del run (p.ej. el modelo de embedding) si no usas --email")
     parser.add_argument("--backend-url", default="http://localhost:8000")
@@ -118,7 +116,6 @@ async def run_query(client: httpx.AsyncClient, args: argparse.Namespace,
         "limit": args.limit,
         "include_score_breakdown": True,
         "register_log": False,
-        "allow_private": args.allow_private,
     }
     for attempt in range(MAX_RETRIES_429 + 1):
         await pacer.wait()

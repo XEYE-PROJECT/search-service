@@ -8,17 +8,20 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from app.application.ports import ListDataPayload
 from app.domain.models import ListMeta
-from app.infrastructure.web.deps import require_internal_token
+from app.infrastructure.web.deps import enforce_user_limit, require_internal_token
 from app.infrastructure.web.schemas import (
     ApiKeyUpsertRequest,
+    ConsoleSearchRequest,
     HealthResponse,
     IndexPushRequest,
     InternalAck,
     ListMetaUpdateRequest,
+    SearchResponse,
+    UserLimitsRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +39,20 @@ async def health(request: Request):
         lists_cached=len(container.cache),
         cache_bytes=container.cache.total_bytes,
         logs_pending=container.log_queue.pending,
+    )
+
+
+@router.post("/lists/{list_id}/search", response_model=SearchResponse, response_model_exclude_none=True)
+async def console_search(request: Request, response: Response, list_id: int, body: ConsoleSearchRequest):
+    """Búsqueda del playground de la consola, reenviada por el backend (que ya comprobó que la
+    lista pertenece al usuario autenticado): sirve también listas privadas, sin API key y sin
+    log de búsqueda. Cuenta contra el cupo por usuario igual que la API pública."""
+    container = request.app.state.container
+    meta = await container.search.resolve_list_by_id(list_id)
+    enforce_user_limit(request, response, meta.user_id)
+    return await container.search.search(
+        meta, None, body.search_term, body.limit,
+        include_breakdown=body.include_score_breakdown, register_log=False,
     )
 
 
@@ -96,10 +113,18 @@ async def delete_api_key(request: Request, api_key_id: int):
     return InternalAck(message=f"api key {api_key_id} removed")
 
 
+@router.put("/users/{user_id}/limits", response_model=InternalAck)
+async def update_user_limits(request: Request, user_id: int, body: UserLimitsRequest):
+    """Un admin cambió las búsquedas/minuto del usuario (``null`` = volver al por defecto)."""
+    request.app.state.container.user_limits.set(user_id, body.rate_limit_per_minute)
+    return InternalAck(message=f"user {user_id} limits updated")
+
+
 @router.delete("/users/{user_id}", response_model=InternalAck)
 async def delete_user(request: Request, user_id: int):
     container = request.app.state.container
     container.api_keys.remove_user(user_id)
+    container.user_limits.remove_user(user_id)
     container.list_data.remove_user(user_id)
     return InternalAck(message=f"user {user_id} removed")
 

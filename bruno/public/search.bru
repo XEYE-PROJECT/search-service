@@ -26,8 +26,11 @@ body:json {
 
 
 docs {
-  Búsqueda híbrida (texto + semántica) sobre una lista PÚBLICA del dueño de la API key.
-  Rate limit: 60/min por key. `limit` 1-1000 (default 50).
-  `include_score_breakdown: true` añade text_score y semantic_score a cada resultado.
-  Errores: 401 (key inválida), 403 (lista privada), 404 (lista no existe), 429 (rate limit), 503 (no ready).
+  Búsqueda híbrida (texto + semántica) sobre una lista PÚBLICA del dueño de la API key (las
+  privadas solo se buscan desde la consola). Body estricto: campos desconocidos → 422.
+  Rate limit: por usuario (todas sus keys) y por IP; cabeceras X-RateLimit-* y Retry-After.
+  `limit` 1-1000 (default 50). `include_score_breakdown: true` añade text_score y semantic_score.
+  Errores (sobre {status, error, code, message}): 401 API_KEY_MISSING/API_KEY_INVALID,
+  403 LIST_NOT_PUBLIC, 404 LIST_NOT_FOUND, 413 REQUEST_TOO_LARGE, 422 VALIDATION_FAILED,
+  429 RATE_LIMITED, 503 BACKEND_UNAVAILABLE.
 }

@@ -1,0 +1,29 @@
+meta {
+  name: Console search
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/v1/lists/{{listId}}/search
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+body:json {
+  {
+    "search_term": "tuberias",
+    "limit": 10,
+    "include_score_breakdown": true
+  }
+}
+
+docs {
+  La búsqueda del playground de la consola: el backend la reenvía aquí (POST /lists/{id}/search
+  con JWT) tras comprobar que la lista es del usuario. Sirve también listas privadas, sin API
+  key ni log de búsqueda, y cuenta contra el cupo por usuario (X-RateLimit-*).
+}

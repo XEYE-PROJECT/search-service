@@ -22,10 +22,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.application.errors import ApiException
 from app.core.config import Settings, get_settings
 from app.core.container import Container, build_container
 from app.core.logging import configure_logging
+from app.infrastructure.web.error_handlers import register_error_handlers
+from app.infrastructure.web.guards import RequestGuardMiddleware
 from app.infrastructure.web.internal_router import router as internal_router
 from app.infrastructure.web.public_router import router as public_router
 
@@ -154,19 +155,21 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         app.state.container = container
 
     # La auth vive en dependencias (nunca corren en OPTIONS), así el preflight CORS funciona.
+    # Los middlewares se ejecutan en orden inverso al de registro: la guarda de Host/tamaño
+    # envuelve a CORS, así un Host falso se rechaza antes de nada.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
     )
-
-    @app.exception_handler(ApiException)
-    async def handle_api_exception(_request: Request, exc: ApiException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"error": exc.error, "detail": exc.detail},
-        )
+    app.add_middleware(
+        RequestGuardMiddleware,
+        allowed_hosts=settings.allowed_host_list,
+        max_public_body_bytes=settings.max_request_bytes,
+    )
+    register_error_handlers(app)
 
     @app.get("/", tags=["meta"])
     async def root():

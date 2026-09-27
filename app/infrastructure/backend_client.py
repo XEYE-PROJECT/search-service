@@ -52,7 +52,14 @@ class BackendClient:
         embedding_models = [
             name for name in body.get("embeddingModels") or [] if isinstance(name, str) and name.strip()
         ]
-        return BootstrapData(api_keys=api_keys, lists=lists, embedding_models=embedding_models)
+        user_limits = [
+            (entry["userId"], int(entry["rateLimitPerMinute"]))
+            for entry in body.get("userLimits") or []
+            if entry.get("rateLimitPerMinute")
+        ]
+        return BootstrapData(
+            api_keys=api_keys, lists=lists, embedding_models=embedding_models, user_limits=user_limits
+        )
 
     async def fetch_list_data(self, list_id: int) -> ListDataPayload | None:
         response = await self._http.get(f"/internal/search/lists/{list_id}")

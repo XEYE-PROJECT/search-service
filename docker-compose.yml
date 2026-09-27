@@ -22,7 +22,7 @@ services:
       # URL del backend vista desde el contenedor (ver cabecera — a propósito no ${BACKEND_URL}).
       BACKEND_URL: ${DOCKER_BACKEND_URL:-http://xeye-java-backend:8000}
       # Sin fallback silencioso: el .env debe definirlo (dev-internal-token vale en development).
-      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Define INTERNAL_TOKEN en .env (en dev: dev-internal-token)}
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:?Define INTERNAL_TOKEN en .env (en dev vale dev-internal-token)}"
       SENTRY_DSN: ${SENTRY_DSN:-}
       BACKEND_TIMEOUT_SECONDS: ${BACKEND_TIMEOUT_SECONDS:-30}
       EMBEDDING_MODEL_DEFAULT: ${EMBEDDING_MODEL_DEFAULT:-paraphrase-multilingual-MiniLM-L12-v2}
@@ -33,6 +33,10 @@ services:
       SEARCH_SEMANTIC_WEIGHT: ${SEARCH_SEMANTIC_WEIGHT:-0.75}
       SCORE_OVERRIDE_THRESHOLD: ${SCORE_OVERRIDE_THRESHOLD:-0.75}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      RATE_LIMIT_PER_IP_PER_MINUTE: ${RATE_LIMIT_PER_IP_PER_MINUTE:-300}
+      MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-16384}
+      # Dev: cualquier Host. En producción xeye-infra fija la lista real (search.xeye.es,...).
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173}
       REFRESH_INTERVAL_SECONDS: ${REFRESH_INTERVAL_SECONDS:-3600}
       LOG_BATCH_MAX: ${LOG_BATCH_MAX:-50}

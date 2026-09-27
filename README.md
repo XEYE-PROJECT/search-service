@@ -66,19 +66,43 @@ app/
 Sondas sin auth: `GET /health` (liveness, docker) y `GET /ready` (readiness: 503 hasta que el
 bootstrap contra el backend ha terminado; es la que vigila el monitor de uptime).
 
-Pública (cabecera `X-API-Key`, rate limit 60/min por key, CORS habilitado; la key se hashea y
-se busca en el catálogo):
+Pública (cabecera `X-API-Key`; la key se hashea y se busca en el catálogo). Solo sirve listas
+**públicas** del dueño de la key: la visibilidad la decide el propietario desde la consola, nunca
+el cliente. Los cuerpos son estrictos (campos desconocidos o términos en blanco → 422).
 
-- `POST /api/v1/search` — `{list_name, search_term, limit?, session?, include_score_breakdown?, register_log?, allow_private?}`
+- `POST /api/v1/search` — `{list_name, search_term, limit?=50 (1-1000), session?, include_score_breakdown?, register_log?=true}`
   → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms}`.
-  Solo listas **públicas** del dueño de la key. Errores: `{error, detail}` con 401/403/404/429/503.
 - `POST /api/v1/target` — `{list_name, target_term, session}` → `{success}` (solo auditoría).
+
+**Rate limit.** Dos ventanas fijas de 60 s: por **usuario** (todas sus API keys comparten el cupo;
+`RATE_LIMIT_PER_MINUTE` es el valor por defecto y un admin puede fijar otro por usuario desde la
+consola, que llega por el bootstrap y por `PUT /v1/users/{id}/limits`) y por **IP**
+(`RATE_LIMIT_PER_IP_PER_MINUTE`, contada antes de resolver la key). Cada respuesta autenticada
+lleva `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `X-RateLimit-Reset` (segundos hasta la
+siguiente ventana); los 429 añaden `Retry-After`.
+
+**Errores.** Un solo formato en toda la API, el mismo sobre que el backend Java:
+
+```json
+{"status": 403, "error": "Forbidden", "code": "LIST_NOT_PUBLIC",
+ "message": "List 'x' is private; the public API only serves public lists"}
+```
+
+`code` es estable (para máquinas); `message` es inglés para humanos. Códigos: `API_KEY_MISSING`,
+`API_KEY_INVALID` (401) · `LIST_NOT_PUBLIC`, `INTERNAL_TOKEN_INVALID` (403) · `LIST_NOT_FOUND`,
+`NOT_FOUND` (404) · `METHOD_NOT_ALLOWED` (405) · `REQUEST_TOO_LARGE` (413, > `MAX_REQUEST_BYTES`) ·
+`VALIDATION_FAILED` (422, con `details` por campo) · `RATE_LIMITED` (429) · `INVALID_HOST` (400,
+`Host` fuera de `ALLOWED_HOSTS`) · `BACKEND_UNAVAILABLE` (503) · `INTERNAL_ERROR` (500). Todo
+401/403/429 se anota en el logger `xeye.audit` con IP, ruta y el prefijo de la key (nunca entera).
 
 Interna (cabecera `X-Internal-Token`, comparada en tiempo constante; solo el backend):
 
+- `POST /v1/lists/{id}/search` — búsqueda del **playground de la consola**, que el backend reenvía
+  tras comprobar que la lista es del usuario (`{search_term, limit?, include_score_breakdown?}`;
+  también listas privadas, sin API key, sin log, contra el cupo del usuario).
 - `POST /v1/lists/{id}/index` · `PUT /v1/lists/{id}/meta` · `DELETE /v1/lists/{id}` ·
   `POST /v1/lists/{id}/invalidate` · `PUT|DELETE /v1/api-keys/{id}` ·
-  `DELETE /v1/users/{id}` · `POST /v1/refresh` · `GET /v1/health`
+  `PUT /v1/users/{id}/limits` · `DELETE /v1/users/{id}` · `POST /v1/refresh` · `GET /v1/health`
 
 ## Ejecutar
 
@@ -105,8 +129,11 @@ docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
 `ENVIRONMENT=production` es el valor por defecto: el servicio **no arranca** si
 `INTERNAL_TOKEN` está vacío, es el de desarrollo o tiene menos de 32 caracteres, si algún
 `CORS_ORIGINS` no es `https://` o es `localhost`, si `BACKEND_URL` apunta a `localhost` (dentro
-del contenedor sería él mismo) o si `RATE_LIMIT_PER_MINUTE` es 0; el error de arranque lista
-todos los problemas nombrando la variable. Tampoco expone `/docs`, `/redoc` ni `/openapi.json`. En una máquina de desarrollo hay que declarar
+del contenedor sería él mismo), si algún límite (`RATE_LIMIT_*`, `MAX_REQUEST_BYTES`) es 0 o si
+`ALLOWED_HOSTS` es `*`; el error de arranque lista todos los problemas nombrando la variable.
+Detrás del proxy, uvicorn corre con `--proxy-headers` (`FORWARDED_ALLOW_IPS=*` en la imagen: el
+contenedor solo es alcanzable desde la red docker) para que el límite por IP y el log de
+auditoría vean la IP real del cliente. Tampoco expone `/docs`, `/redoc` ni `/openapi.json`. En una máquina de desarrollo hay que declarar
 `ENVIRONMENT=development`. `SENTRY_DSN` activa el error tracking (las cabeceras `X-API-Key`
 y `X-Internal-Token` se eliminan de los eventos). El proxy solo publica `/api/v1/*`, `/`,
 `/health` y `/ready`.

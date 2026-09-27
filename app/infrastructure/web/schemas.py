@@ -1,8 +1,11 @@
 """Esquemas de petición/respuesta.
 
-La API pública va en snake_case (el contrato histórico del frontend y la doc de clientes).
-Los cuerpos internos del backend llegan en camelCase (defaults de Jackson) — aquí se
-mapean con alias; el backend serializa los null explícitos, de ahí tanto Optional.
+La API pública va en snake_case (el contrato histórico del frontend y la doc de clientes) y es
+ESTRICTA: campos desconocidos → 422 (``extra="forbid"``) y los textos se recortan antes de
+validar, así un término en blanco también da 422. Los cuerpos internos del backend llegan en
+camelCase (defaults de Jackson) — aquí se mapean con alias; el backend serializa los null
+explícitos, de ahí tanto Optional. Los internos NO son estrictos a propósito: el backend y este
+servicio se despliegan por separado y un campo nuevo del backend no debe romper el push.
 """
 
 from __future__ import annotations
@@ -15,18 +18,27 @@ from app.core.security import hash_api_key
 
 # --------------------------------------------------------------------------- pública --
 
+_STRICT = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
 
 class PublicSearchRequest(BaseModel):
+    """``POST /api/v1/search``. Solo listas PÚBLICAS del dueño de la key: la visibilidad la
+    decide el propietario en la consola, nunca el cliente (el antiguo ``allow_private`` ya no
+    existe y, como cualquier campo desconocido, responde 422)."""
+
+    model_config = _STRICT
+
     list_name: str = Field(min_length=1, max_length=100)
     search_term: str = Field(min_length=1, max_length=500)
     limit: int = Field(default=50, ge=1, le=1000)
-    session: str | None = Field(default=None, max_length=255)
+    session: str | None = Field(default=None, min_length=1, max_length=255)
     include_score_breakdown: bool = False
     register_log: bool = True
-    allow_private: bool = False
 
 
 class PublicTargetRequest(BaseModel):
+    model_config = _STRICT
+
     list_name: str = Field(min_length=1, max_length=100)
     target_term: str = Field(min_length=1, max_length=500)
     session: str = Field(min_length=1, max_length=255)
@@ -60,6 +72,18 @@ class TargetResponse(BaseModel):
 class InternalAck(BaseModel):
     success: bool = True
     message: str = "ok"
+
+
+class ConsoleSearchRequest(BaseModel):
+    """``POST /v1/lists/{id}/search``: la búsqueda del playground de la consola, que el backend
+    reenvía tras comprobar que la lista es del usuario autenticado (por eso aquí no se mira
+    la visibilidad). Sin API key de por medio, y sin log de búsqueda."""
+
+    model_config = _STRICT
+
+    search_term: str = Field(min_length=1, max_length=500)
+    limit: int = Field(default=50, ge=1, le=1000)
+    include_score_breakdown: bool = False
 
 
 class IndexPushElement(BaseModel):
@@ -116,6 +140,14 @@ class ApiKeyUpsertRequest(BaseModel):
 
     def resolved_hash(self) -> str:
         return self.key_hash or hash_api_key(self.api_key or "")
+
+
+class UserLimitsRequest(BaseModel):
+    """``PUT /v1/users/{id}/limits``: búsquedas/minuto del usuario; ``null`` vuelve al por defecto."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    rate_limit_per_minute: int | None = Field(default=None, alias="rateLimitPerMinute", ge=1, le=1_000_000)
 
 
 class HealthResponse(BaseModel):

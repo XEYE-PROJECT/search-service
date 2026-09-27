@@ -54,7 +54,19 @@ class Settings(BaseSettings):
     score_override_threshold: float = 0.75
 
     # API pública.
+    #: Búsquedas/minuto por USUARIO (todas sus API keys comparten el cupo). Es el "plan por
+    #: defecto": el backend puede fijar otro valor por usuario (admin), que llega en el bootstrap
+    #: y por PUT /v1/users/{id}/limits.
     rate_limit_per_minute: int = 60
+    #: Peticiones/minuto por IP a la API pública, contadas ANTES de resolver la key: acota los
+    #: intentos de adivinar keys (401) y a un cliente que reparta el tráfico entre varias keys.
+    rate_limit_per_ip_per_minute: int = 300
+    #: Tamaño máximo del body de la API pública (413 por encima). 16 KiB sobra: search_term
+    #: tiene 500 caracteres de tope. La API interna no se limita (el push de índice lleva embeddings).
+    max_request_bytes: int = 16_384
+    #: Cabeceras Host aceptadas (TrustedHost): el dominio público, el nombre del contenedor
+    #: (backend por la red docker) y localhost (healthcheck). "*" = cualquiera (solo desarrollo).
+    allowed_hosts: str = "*"
     cors_origins: str = (
         "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173"
     )
@@ -72,6 +84,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def allowed_host_list(self) -> list[str]:
+        return [host.strip().lower() for host in self.allowed_hosts.split(",") if host.strip()]
 
     @property
     def is_production(self) -> bool:
@@ -126,6 +142,19 @@ class Settings(BaseSettings):
 
         if self.rate_limit_per_minute <= 0:
             problems.append("RATE_LIMIT_PER_MINUTE must be > 0 in production")
+        if self.rate_limit_per_ip_per_minute <= 0:
+            problems.append("RATE_LIMIT_PER_IP_PER_MINUTE must be > 0 in production")
+        if self.max_request_bytes <= 0:
+            problems.append("MAX_REQUEST_BYTES must be > 0 in production")
+
+        # Sin TrustedHost, una petición con Host arbitrario (p. ej. vía un proxy mal configurado)
+        # llegaría a la app; el proxy real reenvía el Host público tal cual.
+        hosts = self.allowed_host_list
+        if not hosts or "*" in hosts:
+            problems.append(
+                "ALLOWED_HOSTS must list the accepted Host headers in production "
+                "(search.xeye.es,search-service,localhost), not '*'"
+            )
 
         if problems:
             raise ValueError("Unsafe production configuration:\n - " + "\n - ".join(problems))

@@ -10,7 +10,7 @@ import pytest
 # exige un INTERNAL_TOKEN fuerte. Los tests son desarrollo, pase lo que pase en el .env local.
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog
+from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog, UserLimits
 from app.application.list_data import ListDataService
 from app.application.ports import BootstrapData, ListDataPayload, LogEntry
 from app.application.search_use_case import SearchUseCase
@@ -37,6 +37,7 @@ class FakeBackend:
     def __init__(self) -> None:
         self.api_keys: list[tuple[int, int, str]] = []
         self.lists: list[ListMeta] = []
+        self.user_limits: list[tuple[int, int]] = []  # (user_id, búsquedas/min) distintos del default
         self.list_payloads: dict[int, ListDataPayload] = {}
         self.pushed_logs: list[LogEntry] = []
         self.bootstrap_calls = 0
@@ -50,7 +51,8 @@ class FakeBackend:
         await asyncio.sleep(0)  # cede el control, como una ida y vuelta HTTP real
         if self.fail_bootstrap:
             raise ConnectionError("backend down")
-        return BootstrapData(api_keys=list(self.api_keys), lists=list(self.lists))
+        return BootstrapData(api_keys=list(self.api_keys), lists=list(self.lists),
+                             user_limits=list(self.user_limits))
 
     async def fetch_list_data(self, list_id: int) -> ListDataPayload | None:
         self.list_fetches.append(list_id)
@@ -92,8 +94,10 @@ def make_settings(**overrides) -> Settings:
         rate_limit_per_minute=1000,
     )
     if overrides.get("environment") == "production":
-        # Lo que un env de producción válido lleva además del token (CORS https, backend no-localhost).
+        # Lo que un env de producción válido lleva además del token (CORS https, backend
+        # no-localhost, Hosts explícitos).
         defaults["cors_origins"] = "https://xeye.es"
+        defaults["allowed_hosts"] = "search.xeye.es,search-service,localhost"
     defaults.update(overrides)
     return Settings(_env_file=None, **defaults)
 
@@ -103,8 +107,10 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
 
     api_keys = ApiKeyStore()
     lists = ListCatalog()
+    user_limits = UserLimits()
     catalog_service = CatalogService(
-        backend, api_keys, lists, min_refresh_interval=settings.refresh_min_interval_seconds
+        backend, api_keys, lists, user_limits=user_limits,
+        min_refresh_interval=settings.refresh_min_interval_seconds,
     )
     cache = ListDataCache(settings.cache_max_bytes)
     list_data = ListDataService(cache, backend, lists, partial(build_list_data, settings=settings))
@@ -116,6 +122,7 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
         retries=settings.log_push_retries,
     )
     rate_limiter = RateLimiter(settings.rate_limit_per_minute)
+    ip_rate_limiter = RateLimiter(settings.rate_limit_per_ip_per_minute)
     search = SearchUseCase(
         catalog_service, list_data, embedder, log_queue,
         ScoringConfig(
@@ -126,8 +133,9 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
     )
     return Container(
         settings=settings, backend=backend, embedder=embedder, api_keys=api_keys,
-        lists=lists, catalog_service=catalog_service, cache=cache, list_data=list_data,
-        log_queue=log_queue, rate_limiter=rate_limiter, search=search,
+        lists=lists, user_limits=user_limits, catalog_service=catalog_service, cache=cache,
+        list_data=list_data, log_queue=log_queue, rate_limiter=rate_limiter,
+        ip_rate_limiter=ip_rate_limiter, search=search,
     )
 
 

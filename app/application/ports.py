@@ -17,6 +17,8 @@ class BootstrapData:
 
     api_keys: list[tuple[int, int, str]]  # (id, user_id, key_hash) — SHA-256 hex, nunca en claro
     lists: list[ListMeta]
+    # (user_id, búsquedas/min) solo de los usuarios con un límite distinto del por defecto.
+    user_limits: list[tuple[int, int]] = field(default_factory=list)
     # Modelos con los que pueden lanzarse entrenamientos — se precalientan al arrancar
     # para que la primera búsqueda con cada uno no pague la carga/descarga.
     embedding_models: list[str] = field(default_factory=list)

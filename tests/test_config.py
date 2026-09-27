@@ -7,7 +7,8 @@ from app.core.config import MIN_INTERNAL_TOKEN_LENGTH, Settings, is_local_host
 from app.core.security import constant_time_equals, hash_api_key
 
 #: Lo que un env de producción válido tiene además del token (ver xeye-infra/env/search.env.example).
-PROD_OK = dict(cors_origins="https://xeye.es,https://www.xeye.es", backend_url="http://xeye-backend:8000")
+PROD_OK = dict(cors_origins="https://xeye.es,https://www.xeye.es", backend_url="http://xeye-backend:8000",
+               allowed_hosts="search.xeye.es,search-service,localhost")
 
 
 def settings(**overrides) -> Settings:
@@ -53,6 +54,11 @@ def test_development_accepts_the_dev_token_and_enables_docs():
         ("backend_url", "http://127.0.0.1:8000", "BACKEND_URL"),
         ("backend_url", "xeye-backend:8000", "BACKEND_URL"),
         ("rate_limit_per_minute", 0, "RATE_LIMIT_PER_MINUTE"),
+        ("rate_limit_per_ip_per_minute", 0, "RATE_LIMIT_PER_IP_PER_MINUTE"),
+        ("max_request_bytes", 0, "MAX_REQUEST_BYTES"),
+        ("allowed_hosts", "*", "ALLOWED_HOSTS"),
+        ("allowed_hosts", "", "ALLOWED_HOSTS"),
+        ("allowed_hosts", "search.xeye.es,*", "ALLOWED_HOSTS"),
     ],
 )
 def test_production_rejects_dev_urls_and_origins(field, value, variable):
@@ -71,6 +77,12 @@ def test_production_reports_every_problem_at_once():
 def test_development_accepts_localhost_everywhere():
     cfg = settings(environment="development")  # defaults: CORS y backend en localhost
     assert cfg.backend_url.startswith("http://localhost")
+    assert cfg.allowed_host_list == ["*"]
+
+
+def test_allowed_hosts_are_normalized():
+    cfg = settings(environment="development", allowed_hosts=" Search.XEYE.es, localhost ,")
+    assert cfg.allowed_host_list == ["search.xeye.es", "localhost"]
 
 
 def test_is_local_host():

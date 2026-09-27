@@ -32,5 +32,11 @@ COPY app ./app
 ARG GIT_SHA=unknown
 ENV SENTRY_RELEASE=${GIT_SHA}
 
+# Detrás del proxy (Caddy) la IP real del cliente llega en X-Forwarded-For: uvicorn la usa como
+# request.client (rate limit por IP, logs de auditoría) solo si el proxy está en
+# FORWARDED_ALLOW_IPS. El contenedor solo es alcanzable desde la red docker (proxy y backend),
+# así que se confía en cualquier origen; fuera de docker, restringir a la IP del proxy.
+ENV FORWARDED_ALLOW_IPS=*
+
 EXPOSE 8002
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--proxy-headers"]

@@ -1,0 +1,27 @@
+meta {
+  name: Update user limits
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/v1/users/{{userId}}/limits
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Token: {{internalToken}}
+}
+
+body:json {
+  {
+    "rateLimitPerMinute": 120
+  }
+}
+
+docs {
+  Búsquedas/minuto del usuario (lo fija un admin desde la consola; el backend lo reenvía aquí).
+  `null` vuelve al valor por defecto (RATE_LIMIT_PER_MINUTE). El bootstrap trae los límites
+  vigentes en `userLimits`.
+}

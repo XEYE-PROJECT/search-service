@@ -1,15 +1,20 @@
-"""Dependencias FastAPI: acceso al contenedor DI, auth por API key (+ rate limit) y auth interna.
+"""Dependencias FastAPI: acceso al contenedor DI, auth por API key (+ rate limits) y auth interna.
 
 La auth es una *dependencia* a propósito, no middleware: las dependencias nunca corren en
 el preflight OPTIONS de CORS, lo que arregla el bug del servicio original (los preflight
 recibían 401 antes de que CORS pudiera responder).
+
+Orden en la API pública: límite por IP (antes de mirar la key: acota los 401 de fuerza bruta)
+→ resolución de la key (401) → límite del USUARIO dueño de la key (todas sus keys y la consola
+comparten el cupo; el valor es el del plan por defecto o el que fijó un admin). Las cabeceras
+``X-RateLimit-*`` salen en cada respuesta autenticada y, con ``Retry-After``, en los 429.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, Request, Response
 
 from app.application.errors import (
     InvalidApiKeyError,
@@ -28,11 +33,32 @@ def get_container(request: Request):
 Container = Annotated[object, Depends(get_container)]
 
 
+def client_ip(request: Request) -> str:
+    """IP del cliente. Detrás del proxy es la de ``X-Forwarded-For`` porque uvicorn corre con
+    ``--proxy-headers`` y ``FORWARDED_ALLOW_IPS`` (ver Dockerfile); sin proxy, la del socket."""
+    return request.client.host if request.client else "unknown"
+
+
+def enforce_user_limit(request: Request, response: Response, user_id: int) -> None:
+    """Cuenta una búsqueda del usuario contra su cupo (429 si se agota)."""
+    container = request.app.state.container
+    limit = container.user_limits.get(user_id, container.settings.rate_limit_per_minute)
+    decision = container.rate_limiter.check(f"user:{user_id}", limit)
+    if not decision.allowed:
+        raise RateLimitedError(decision.limit, decision.reset_seconds, scope="account")
+    response.headers.update(decision.headers())
+
+
 async def require_api_key(
     request: Request,
+    response: Response,
     x_api_key: Annotated[str | None, Header()] = None,
 ) -> ApiKeyInfo:
     container = request.app.state.container
+    ip_decision = container.ip_rate_limiter.check(f"ip:{client_ip(request)}")
+    if not ip_decision.allowed:
+        raise RateLimitedError(ip_decision.limit, ip_decision.reset_seconds, scope="IP address")
+
     if not x_api_key or not x_api_key.strip():
         raise MissingApiKeyError()
     raw = x_api_key.strip()
@@ -41,8 +67,7 @@ async def require_api_key(
         info = container.api_keys.resolve_raw(raw)
     if info is None:
         raise InvalidApiKeyError()
-    if not container.rate_limiter.allow(str(info.id)):
-        raise RateLimitedError(container.settings.rate_limit_per_minute)
+    enforce_user_limit(request, response, info.user_id)
     return info
 
 

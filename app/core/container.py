@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import partial
 
-from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog
+from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog, UserLimits
 from app.application.list_data import ListDataService
 from app.application.ports import BackendGateway, QueryEmbedder
 from app.application.search_use_case import SearchUseCase
@@ -27,11 +27,13 @@ class Container:
     embedder: QueryEmbedder
     api_keys: ApiKeyStore
     lists: ListCatalog
+    user_limits: UserLimits
     catalog_service: CatalogService
     cache: ListDataCache
     list_data: ListDataService
     log_queue: SearchLogQueue
-    rate_limiter: RateLimiter
+    rate_limiter: RateLimiter  # por usuario (todas sus keys + consola)
+    ip_rate_limiter: RateLimiter  # por IP, antes de resolver la key
     search: SearchUseCase
     background_tasks: list = field(default_factory=list)
 
@@ -58,8 +60,10 @@ def build_container(
 
     api_keys = ApiKeyStore()
     lists = ListCatalog()
+    user_limits = UserLimits()
     catalog_service = CatalogService(
-        backend, api_keys, lists, min_refresh_interval=settings.refresh_min_interval_seconds
+        backend, api_keys, lists, user_limits=user_limits,
+        min_refresh_interval=settings.refresh_min_interval_seconds,
     )
     cache = ListDataCache(settings.cache_max_bytes)
     list_data = ListDataService(cache, backend, lists, partial(build_list_data, settings=settings))
@@ -71,6 +75,7 @@ def build_container(
         retries=settings.log_push_retries,
     )
     rate_limiter = RateLimiter(settings.rate_limit_per_minute)
+    ip_rate_limiter = RateLimiter(settings.rate_limit_per_ip_per_minute)
     search = SearchUseCase(
         catalog_service,
         list_data,
@@ -88,10 +93,12 @@ def build_container(
         embedder=embedder,
         api_keys=api_keys,
         lists=lists,
+        user_limits=user_limits,
         catalog_service=catalog_service,
         cache=cache,
         list_data=list_data,
         log_queue=log_queue,
         rate_limiter=rate_limiter,
+        ip_rate_limiter=ip_rate_limiter,
         search=search,
     )

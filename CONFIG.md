@@ -30,7 +30,11 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 | Variable | Descripción | Default | Prod | Valida |
 |---|---|---|---|---|
 | `CORS_ORIGINS` | Orígenes exactos de la consola (mismos que el backend) | localhost:3000… | **sí** | solo `https://`, sin localhost |
-| `RATE_LIMIT_PER_MINUTE` | Peticiones/min por API key | `60` | **> 0** | > 0 |
+| `ALLOWED_HOSTS` | Cabeceras `Host` aceptadas: dominio público, nombre del contenedor (backend) y `localhost` (healthcheck). `*` = cualquiera | `*` | **sí** | lista explícita, sin `*` |
+| `RATE_LIMIT_PER_MINUTE` | Búsquedas/min por **usuario** (todas sus keys + consola); plan por defecto, un admin puede fijar otro por usuario | `60` | **> 0** | > 0 |
+| `RATE_LIMIT_PER_IP_PER_MINUTE` | Peticiones/min por IP a la API pública, antes de resolver la key | `300` | **> 0** | > 0 |
+| `MAX_REQUEST_BYTES` | Tamaño máximo del body en `/api/v1/*` (413 por encima; la API interna no se limita) | `16384` | **> 0** | > 0 |
+| `FORWARDED_ALLOW_IPS` | Proxies de los que uvicorn acepta `X-Forwarded-For` (IP real para el límite por IP y el log de auditoría) | `*` (Dockerfile) | opcional | — |
 | `SEARCH_SERVICE_PORT` | Solo compose de dev: puerto publicado en el host | `8002` | — | — |
 
 ## Embeddings y caché
@@ -65,11 +69,13 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 - Las cabeceras `X-API-Key`, `X-Internal-Token`, `Authorization` y `Cookie` se eliminan de los
   eventos de Sentry (`_scrub_sensitive_headers`).
 - Las API keys se manejan por hash (`hash_api_key`); el valor crudo solo vive en la petición.
+- El logger `xeye.audit` (401/403/429) escribe IP, ruta y los 12 primeros caracteres de la key
+  (el mismo prefijo que muestra la consola), nunca la key completa ni el token interno.
 
 ## Comprobación rápida
 
 ```bash
 docker run --rm -e ENVIRONMENT=production -e INTERNAL_TOKEN=dev-internal-token ghcr.io/xeye-project/search-service:latest
-# -> ValidationError "Unsafe production configuration" listando INTERNAL_TOKEN, CORS_ORIGINS y BACKEND_URL
+# -> ValidationError "Unsafe production configuration" listando INTERNAL_TOKEN, CORS_ORIGINS, BACKEND_URL y ALLOWED_HOSTS
 docker run --rm --env-file env/search.env ghcr.io/xeye-project/search-service:latest   # arranca
 ```

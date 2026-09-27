@@ -1,4 +1,8 @@
-"""API pública (X-API-Key): los endpoints que llaman directamente clientes y frontend."""
+"""API pública (X-API-Key): los endpoints que llaman las integraciones de los usuarios.
+
+Solo sirve listas PÚBLICAS del dueño de la key. Las privadas se buscan desde la consola, que
+pasa por el backend y llega aquí por la API interna (``/v1/lists/{id}/search``).
+"""
 
 from __future__ import annotations
 
@@ -25,9 +29,7 @@ async def search(
     auth: Annotated[ApiKeyInfo, Depends(require_api_key)],
 ):
     search_use_case = request.app.state.container.search
-    meta = await search_use_case.resolve_public_list(
-        auth.user_id, body.list_name, allow_private=body.allow_private
-    )
+    meta = await search_use_case.resolve_public_list(auth.user_id, body.list_name)
     return await search_use_case.search(
         meta,
         auth,
