@@ -17,6 +17,7 @@ import time
 from app.application.ports import BackendGateway
 from app.core.security import hash_api_key
 from app.domain.models import ApiKeyInfo, ListMeta
+from app.infrastructure import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,12 @@ class CatalogService:
     async def refresh(self) -> None:
         """Re-sync completo desde el backend (lanza si el fetch falla)."""
         async with self._refresh_lock:
-            await self._refresh_locked()
+            try:
+                await self._refresh_locked()
+            except Exception:
+                metrics.CATALOG_REFRESHES.labels("error").inc()
+                raise
+            metrics.CATALOG_REFRESHES.labels("ok").inc()
 
     async def refresh_on_miss(self) -> bool:
         """Refresh al no resolver una key/lista (quizá recién creada y con el push perdido).

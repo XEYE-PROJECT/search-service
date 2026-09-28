@@ -57,11 +57,25 @@ class InvalidApiKeyError(ApiException):
         super().__init__(401, "API_KEY_INVALID", "The API key does not exist or was revoked")
 
 
+class ServiceNotReadyError(ApiException):
+    """503 mientras los catálogos aún no se han cargado del backend (o no se han podido
+    recargar): sin ellos no se puede saber si una key es válida, así que no es un 401."""
+
+    def __init__(self, retry_after_seconds: int = 5) -> None:
+        super().__init__(
+            503,
+            "SERVICE_NOT_READY",
+            "The search service is still loading its catalogs; retry shortly",
+            headers={"Retry-After": str(max(1, retry_after_seconds))},
+        )
+
+
 class RateLimitedError(ApiException):
     """429 con ``Retry-After`` y las cabeceras ``X-RateLimit-*`` de la ventana agotada."""
 
     def __init__(self, limit_per_minute: int, retry_after_seconds: int, scope: str = "account") -> None:
         retry_after = max(1, retry_after_seconds)
+        self.scope = scope
         super().__init__(
             429,
             "RATE_LIMITED",

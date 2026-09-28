@@ -32,7 +32,10 @@ app/
   cachean. Locks por `list_id` garantizan una única carga concurrente (single-flight).
 - **Caché RAM**: LRU acotada por **bytes reales** (`CACHE_MAX_BYTES`, 1 GiB por defecto):
   matriz de embeddings + estructuras FAISS + textos. Al superarse el límite se expulsan
-  las listas menos usadas.
+  las listas menos usadas. Cada entrada tiene un **TTL** (`CACHE_TTL_SECONDS`, 1 h): pasado,
+  se sigue sirviendo y se revalida en segundo plano (stale-while-revalidate); si el backend no
+  responde, se sirve lo viejo y la respuesta lo dice (`degraded`, `stale_data`). Tras cada
+  re-sync del catálogo se descartan las listas cacheadas que el backend ya no tiene.
 - **Push del backend**: al completarse un entrenamiento el backend hace
   `POST /v1/lists/{id}/index` (contrato `SearchIndexCommand`, ahora incluye `model`) y la
   caché se rellena en caliente. Cambios de nombre/visibilidad, borrados, API keys y
@@ -42,9 +45,20 @@ app/
   desde el entrenamiento `in_use` (campo `model` del push / del lazy-load) y los modelos
   de sentence-transformers viven en su propia LRU (`MODELS_MAX_LOADED`; súbelo si el
   backend anuncia más modelos que slots). `EMBEDDING_MODEL_DEFAULT` es solo el fallback.
-- **Logs de búsqueda**: cada llamada pública se encola en una `asyncio.Queue` y un
-  consumidor la envía por lotes a `POST {backend}/internal/search/logs` (tabla
-  `searches` de MariaDB, gestionada por el backend). Nunca bloquea la búsqueda.
+- **Logs de búsqueda** (obligatorios: toda llamada pública se registra; el antiguo
+  `register_log` del cliente se ignora): cada llamada se encola en una `asyncio.Queue` y un
+  consumidor la envía por lotes a `POST {backend}/internal/search/logs` (tabla `searches` de
+  MariaDB, gestionada por el backend). Nunca bloquea la búsqueda y **nunca se pierde**: lo que
+  no se puede entregar (backend caído, cola llena, apagado) va a un spool en disco
+  (`LOG_SPOOL_DIR`, JSONL) que se reenvía solo cuando el backend vuelve.
+- **Degradación explícita**: toda respuesta de búsqueda lleva `degraded` y
+  `degradation_reasons` (`no_embeddings`: lista sin vectores, solo texto · `model_unavailable`:
+  el modelo de embedding no pudo cargarse · `model_mismatch`: dimensión distinta · `stale_data`:
+  caché caduca sin poder revalidar), más la cabecera `X-Search-Degraded: true`.
+- **Observabilidad**: logs JSON en producción (`LOG_FORMAT`) con `request_id` en cada línea
+  (cabecera `X-Request-Id`, respetada si la manda el proxy), access log propio, y
+  `GET /metrics` Prometheus (solo red docker). `/health` y `/ready` devuelven el estado real
+  (`ready`, `degraded`, `checks`).
 
 ### Scoring (híbrido texto + semántico)
 
@@ -72,8 +86,9 @@ Pública (cabecera `X-API-Key`; la key se hashea y se busca en el catálogo). So
 **públicas** del dueño de la key: la visibilidad la decide el propietario desde la consola, nunca
 el cliente. Los cuerpos son estrictos (campos desconocidos o términos en blanco → 422).
 
-- `POST /api/v1/search` — `{list_name, search_term, limit?=50 (1-1000), session?, include_score_breakdown?, register_log?=true}`
-  → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms}`.
+- `POST /api/v1/search` — `{list_name, search_term, limit?=50 (1-1000), session?, include_score_breakdown?}`
+  (`register_log` es obsoleto y se ignora)
+  → `{success, results:[{item, score, params, text_score?, semantic_score?}], total_results, search_term, list_name, duration_ms, degraded, degradation_reasons}`.
 - `POST /api/v1/target` — `{list_name, target_term, session}` → `{success}` (solo auditoría).
 
 **Rate limit.** Dos ventanas fijas de 60 s: por **usuario** (todas sus API keys comparten el cupo;
@@ -94,8 +109,10 @@ siguiente ventana); los 429 añaden `Retry-After`.
 `API_KEY_INVALID` (401) · `LIST_NOT_PUBLIC`, `INTERNAL_TOKEN_INVALID` (403) · `LIST_NOT_FOUND`,
 `NOT_FOUND` (404) · `METHOD_NOT_ALLOWED` (405) · `REQUEST_TOO_LARGE` (413, > `MAX_REQUEST_BYTES`) ·
 `VALIDATION_FAILED` (422, con `details` por campo) · `RATE_LIMITED` (429) · `INVALID_HOST` (400,
-`Host` fuera de `ALLOWED_HOSTS`) · `BACKEND_UNAVAILABLE` (503) · `INTERNAL_ERROR` (500). Todo
-401/403/429 se anota en el logger `xeye.audit` con IP, ruta y el prefijo de la key (nunca entera).
+`Host` fuera de `ALLOWED_HOSTS`) · `SERVICE_NOT_READY` (503 + `Retry-After`: los catálogos aún no se
+han cargado del backend — nunca un 401 engañoso mientras tanto) · `BACKEND_UNAVAILABLE` (503) ·
+`INTERNAL_ERROR` (500). Todo 401/403/429 se anota en el logger `xeye.audit` con IP, ruta y el
+prefijo de la key (nunca entera).
 
 Interna (cabecera `X-Internal-Token`, comparada en tiempo constante; solo el backend):
 
@@ -104,7 +121,8 @@ Interna (cabecera `X-Internal-Token`, comparada en tiempo constante; solo el bac
   también listas privadas, sin API key, sin log, contra el cupo del usuario).
 - `POST /v1/lists/{id}/index` · `PUT /v1/lists/{id}/meta` · `DELETE /v1/lists/{id}` ·
   `POST /v1/lists/{id}/invalidate` · `PUT|DELETE /v1/api-keys/{id}` ·
-  `PUT /v1/users/{id}/limits` · `DELETE /v1/users/{id}` · `POST /v1/refresh` · `GET /v1/health`
+  `PUT /v1/users/{id}/limits` · `DELETE /v1/users/{id}` · `POST /v1/refresh` · `POST /v1/logs/replay`
+  (reenvía ahora el spool) · `GET /v1/health`
 
 ## Ejecutar
 
@@ -122,7 +140,17 @@ docker compose up --build
 ```
 
 Variables en `.env.example`; referencia completa con lo **obligatorio en producción** en
-[CONFIG.md](CONFIG.md). En el backend: `SEARCH_PROVIDER=http`,
+[CONFIG.md](CONFIG.md).
+
+**Dependencias.** `requirements.txt` declara rangos; `requirements.lock` fija las versiones exactas
+que instala el Dockerfile (builds reproducibles). Para actualizar: instala los rangos nuevos en un
+venv de Python 3.11 y regenera el lock con las versiones resueltas (`pip freeze`, sin las
+dependencias de desarrollo ni los paquetes `nvidia-*`; `torch` sin sufijo `+cpu`: la imagen lo
+instala desde el índice CPU de PyTorch).
+
+**Imagen.** Corre como usuario sin privilegios (`search`, uid 1001), con `HEALTHCHECK` (liveness),
+y guarda el spool de logs en `/app/data` (montar un volumen). El compose de dev fija
+`restart: unless-stopped`, `mem_limit` y `stop_grace_period`. En el backend: `SEARCH_PROVIDER=http`,
 `SEARCH_SERVICE_URL=http://localhost:8002` (o `http://xeye-search-service:8002` en
 docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
 

@@ -5,6 +5,10 @@ sobre los embeddings entrenados, con la query embebida en vivo con el modelo de 
 Las listas pequeñas puntúan en exacto todos los elementos; las grandes usan dos fases:
 top-K de FAISS HNSW ∪ top-K textual, todo con coseno exacto, y solo ese conjunto acotado
 se rankea. Los elementos sin vector entrenado puntúan solo por texto.
+
+Toda respuesta dice si se sirvió DEGRADADA (``degraded`` + ``degradation_reasons``): sin
+embeddings entrenados, sin modelo de embedding disponible, modelo que no cuadra con los
+vectores, o datos caducos que no se pudieron revalidar. El cliente puede decidir si se fía.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import anyio
@@ -26,6 +30,7 @@ from app.application.ports import LogEntry, QueryEmbedder
 from app.domain.models import ApiKeyInfo, ListMeta, ListSearchData, SearchHit
 from app.domain.normalization import normalize_text
 from app.domain.scoring import ScoringConfig, combine
+from app.infrastructure import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,12 @@ _SCORING_THREAD_THRESHOLD = 2000
 # Dimensionado del pool de candidatos de la ruta en dos fases (HNSW).
 _MIN_CANDIDATES = 100
 _CANDIDATE_FACTOR = 4
+
+# Motivos de degradación (estables: los clientes pueden hacer switch sobre ellos).
+NO_EMBEDDINGS = "no_embeddings"          # la lista no tiene vectores entrenados: solo texto
+MODEL_UNAVAILABLE = "model_unavailable"  # el modelo de embedding no pudo cargarse: solo texto
+MODEL_MISMATCH = "model_mismatch"        # la query se embebió con otra dimensión: solo texto
+STALE_DATA = "stale_data"                # datos más viejos que el TTL y sin poder revalidar
 
 
 def compute_text_scores(processed: list[str], query: str) -> np.ndarray:
@@ -58,6 +69,15 @@ class _Semantic:
 
     row_scores: np.ndarray | None = None
     by_element: dict[int, float | None] | None = None
+
+
+@dataclass
+class _Degradation:
+    reasons: list[str] = field(default_factory=list)
+
+    def add(self, reason: str) -> None:
+        if reason not in self.reasons:
+            self.reasons.append(reason)
 
 
 class SearchUseCase:
@@ -109,12 +129,17 @@ class SearchUseCase:
         session: str | None = None,
         register_log: bool = True,
     ) -> dict:
+        """``register_log`` lo decide el SERVIDOR (la API pública siempre registra; la consola
+        nunca): el antiguo campo del cliente se ignora."""
         started = time.perf_counter()
         data = await self._list_data.get_for_search(meta.id)
         if data is None:
             raise ListNotFoundError(meta.name)
 
-        hits = await self._score(data, search_term, limit)
+        degradation = _Degradation()
+        if self._list_data.is_serving_stale(meta.id):
+            degradation.add(STALE_DATA)
+        hits = await self._score(data, search_term, limit, degradation)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
         results = []
@@ -136,6 +161,14 @@ class SearchUseCase:
                 results={hit.item: round(hit.score, 2) for hit in hits},
             )
 
+        degraded = bool(degradation.reasons)
+        surface = "public" if auth is not None else "console"
+        metrics.SEARCHES.labels(surface, "degraded" if degraded else "ok").inc()
+        for reason in degradation.reasons:
+            metrics.DEGRADED.labels(reason).inc()
+        if degraded:
+            logger.info("Search on list %d served degraded: %s", meta.id, ",".join(degradation.reasons))
+
         return {
             "success": True,
             "results": results,
@@ -143,6 +176,8 @@ class SearchUseCase:
             "search_term": search_term,
             "list_name": meta.name,
             "duration_ms": duration_ms,
+            "degraded": degraded,
+            "degradation_reasons": list(degradation.reasons),
             "error": None,
         }
 
@@ -156,7 +191,9 @@ class SearchUseCase:
         )
         return {"success": True}
 
-    async def _score(self, data: ListSearchData, search_term: str, limit: int) -> list[SearchHit]:
+    async def _score(
+        self, data: ListSearchData, search_term: str, limit: int, degradation: _Degradation
+    ) -> list[SearchHit]:
         if data.size == 0:
             return []
         query_norm = normalize_text(search_term)
@@ -169,7 +206,7 @@ class SearchUseCase:
         else:
             text_scores = compute_text_scores(data.processed, query_norm)
 
-        semantic = await self._semantic_scores(data, search_term, text_scores, limit)
+        semantic = await self._semantic_scores(data, search_term, text_scores, limit, degradation)
 
         if big:
             return await anyio.to_thread.run_sync(
@@ -232,17 +269,21 @@ class SearchUseCase:
         search_term: str,
         text_scores: np.ndarray,
         limit: int,
+        degradation: _Degradation,
     ) -> _Semantic | None:
         if data.index is None:
+            degradation.add(NO_EMBEDDINGS)
             return None
         query_vec = await self._embedder.embed_query(data.model_name, search_term)
         if query_vec is None:
+            degradation.add(MODEL_UNAVAILABLE)
             return None
         if query_vec.shape[0] != data.index.dim:
             logger.warning(
                 "Query embedding dim %d != list %d embeddings dim %d (model mismatch); text-only",
                 query_vec.shape[0], data.list_id, data.index.dim,
             )
+            degradation.add(MODEL_MISMATCH)
             return None
 
         if data.index.is_exact:
@@ -298,7 +339,7 @@ class SearchUseCase:
             searched_at=datetime.now(timezone.utc).isoformat(),
         )
         if not self._log_queue.enqueue(entry):
-            logger.warning("Search-log queue full; dropped a %s entry", endpoint)
+            logger.warning("Search-log queue full and no spool; dropped a %s entry", endpoint)
 
 
 def _parse_params(params_raw: str | None):

@@ -88,6 +88,22 @@ class ModelRegistry:
     def resolve_name(self, model_name: str | None) -> str:
         return model_name or self._default_model
 
+    @property
+    def loaded_models(self) -> list[str]:
+        return list(self._models.keys())
+
+    def is_loaded(self, model_name: str | None = None) -> bool:
+        return self.resolve_name(model_name) in self._models
+
+    def default_model_status(self) -> str:
+        """``loaded`` | ``failed`` (fallo reciente cacheado) | ``loading`` (aún no residente)."""
+        if self._default_model in self._models:
+            return "loaded"
+        failed_at = self._failed_at.get(self._default_model)
+        if failed_at is not None and time.monotonic() - failed_at < self._FAILURE_TTL_SECONDS:
+            return "failed"
+        return "loading"
+
     async def preload_default(self) -> None:
         try:
             await self._get(self._default_model)

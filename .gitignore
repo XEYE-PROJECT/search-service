@@ -11,3 +11,6 @@ evaluation/results/
 
 # Metadatos Zone.Identifier de Windows/WSL
 *.Identifier
+
+# Spool en disco de los logs de búsqueda (LOG_SPOOL_DIR por defecto al correr en el host)
+data/

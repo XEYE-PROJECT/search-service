@@ -20,16 +20,24 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     service_name: str = "xeye-search-service"
-    service_version: str = "2.0.0"
+    service_version: str = "2.1.0"
     log_level: str = "INFO"
+    #: json (una línea JSON por evento, con request_id) | text | auto (json en producción).
+    log_format: Literal["auto", "json", "text"] = "auto"
     #: production (por defecto): token interno fuerte obligatorio, sin Swagger/OpenAPI.
     environment: Literal["development", "production"] = "production"
+    #: ``GET /metrics`` (Prometheus). Solo alcanzable por la red docker: el proxy no lo publica.
+    metrics_enabled: bool = True
 
     # Integración con el backend (servidor a servidor).
     backend_url: str = "http://localhost:8000"
     #: Secreto compartido con el backend (SEARCH_INTERNAL_TOKEN). SecretStr: no sale en logs/repr.
     internal_token: SecretStr = SecretStr("dev-internal-token")
     backend_timeout_seconds: float = 30.0
+    backend_connect_timeout_seconds: float = 5.0
+    #: Reintentos de las lecturas idempotentes al backend (bootstrap, datos de lista) ante
+    #: fallos de red o 5xx, con backoff. Los pushes de logs los reintenta su propia cola.
+    backend_retries: int = 2
 
     # Error tracking (Sentry). Vacío = desactivado.
     sentry_dsn: str = ""
@@ -42,6 +50,10 @@ class Settings(BaseSettings):
 
     # Caché en RAM de los datos de búsqueda por lista (LRU por bytes reales).
     cache_max_bytes: int = 1_073_741_824  # 1 GiB
+    #: Edad máxima de una lista cacheada antes de revalidarla contra el backend en segundo
+    #: plano (stale-while-revalidate: mientras tanto se sirve lo cacheado). Red de seguridad
+    #: para invalidaciones perdidas; 0 la desactiva (solo pushes/invalidate).
+    cache_ttl_seconds: int = 3600
     # Hasta este tamaño se puntúa con coseno exacto (numpy); por encima, FAISS HNSW.
     exact_search_max_elements: int = 4096
     hnsw_m: int = 32
@@ -75,11 +87,24 @@ class Settings(BaseSettings):
     refresh_interval_seconds: int = 3600  # re-sync completo periódico; 0 lo desactiva
     refresh_min_interval_seconds: float = 30.0  # throttle de los refresh por miss
 
-    # Cola de logs de búsqueda (por lotes, asíncrona, best-effort).
+    # Cola de logs de búsqueda (por lotes, asíncrona). Persistente: lo que no se puede
+    # entregar (backend caído, cola llena, apagado) se guarda en disco y se reenvía después.
     log_queue_max: int = 10_000
     log_batch_max: int = 50
     log_flush_seconds: float = 2.0
     log_push_retries: int = 3
+    #: Directorio del spool en disco (JSONL). Vacío = sin spool (solo RAM, se descarta al fallar).
+    log_spool_dir: str = "data/log-spool"
+    #: Tope del spool; por encima se descartan los ficheros más antiguos (con log ERROR).
+    log_spool_max_bytes: int = 52_428_800  # 50 MiB
+    #: Cada cuánto se intenta reenviar lo spooleado.
+    log_spool_replay_seconds: float = 30.0
+
+    @property
+    def log_format_resolved(self) -> str:
+        if self.log_format == "auto":
+            return "json" if self.is_production else "text"
+        return self.log_format
 
     @property
     def cors_origin_list(self) -> list[str]:

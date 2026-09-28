@@ -33,7 +33,9 @@ class PublicSearchRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=1000)
     session: str | None = Field(default=None, min_length=1, max_length=255)
     include_score_breakdown: bool = False
-    register_log: bool = True
+    #: OBSOLETO e ignorado: el registro de uso ya no es opcional (toda búsqueda pública se
+    #: registra). Se sigue aceptando para no romper clientes que aún lo envían.
+    register_log: bool = Field(default=True, deprecated=True)
 
 
 class PublicTargetRequest(BaseModel):
@@ -59,6 +61,10 @@ class SearchResponse(BaseModel):
     search_term: str
     list_name: str
     duration_ms: int
+    #: True si la respuesta se sirvió sin toda la calidad posible; ``degradation_reasons``
+    #: dice por qué (``no_embeddings``, ``model_unavailable``, ``model_mismatch``, ``stale_data``).
+    degraded: bool = False
+    degradation_reasons: list[str] = Field(default_factory=list)
     error: str | None = None
 
 
@@ -153,8 +159,11 @@ class UserLimitsRequest(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     ready: bool
+    degraded: bool = False
+    checks: dict[str, str] = Field(default_factory=dict)
     api_keys: int
     lists: int
     lists_cached: int
     cache_bytes: int
     logs_pending: int
+    logs_spooled: int = 0

@@ -1,4 +1,4 @@
-# XEYE search-service — imagen solo CPU.
+# XEYE search-service — imagen solo CPU, proceso sin privilegios.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,10 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Primero torch de CPU (mucho más pequeño que el build CUDA por defecto), luego el resto.
-COPY requirements.txt .
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements.txt
+# Dependencias con versiones EXACTAS (requirements.lock, generado desde requirements.txt):
+# dos builds del mismo commit dan la misma imagen. Primero torch de CPU (mucho más pequeño que
+# el build CUDA por defecto; su versión también viene del lock), luego el resto.
+COPY requirements.lock .
+RUN pip install --no-cache-dir "$(grep -i '^torch==' requirements.lock)" --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.lock
 
 # Pre-descarga el modelo de embedding por defecto para que el arranque en frío no use red.
 # El ARG hace también de default en runtime: ambos nombran siempre el mismo modelo.
@@ -28,6 +30,15 @@ RUN for m in ${EXTRA_EMBEDDING_MODELS}; do \
 
 COPY app ./app
 
+# Usuario sin privilegios: dueño de la caché de modelos (solo lectura en runtime) y del
+# directorio de datos, donde vive el spool en disco de los logs de búsqueda (montarlo como
+# volumen para que sobreviva a los reinicios).
+RUN useradd --system --uid 1001 --home-dir /app --shell /usr/sbin/nologin search \
+    && mkdir -p /app/data/log-spool \
+    && chown -R search:search /app
+ENV LOG_SPOOL_DIR=/app/data/log-spool
+USER search
+
 # Commit desplegado, para etiquetar los eventos de Sentry (lo pasa el workflow con --build-arg).
 ARG GIT_SHA=unknown
 ENV SENTRY_RELEASE=${GIT_SHA}
@@ -39,4 +50,8 @@ ENV SENTRY_RELEASE=${GIT_SHA}
 ENV FORWARDED_ALLOW_IPS=*
 
 EXPOSE 8002
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--proxy-headers"]
+# Liveness (el proceso atiende). La readiness (/ready) la vigila el monitor externo: con el
+# backend caído el servicio arranca igual y no debe reiniciarse en bucle.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)" || exit 1
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--proxy-headers", "--no-access-log"]

@@ -16,7 +16,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.application.errors import ApiException, error_body
+from app.application.errors import ApiException, RateLimitedError, error_body
+from app.infrastructure import metrics
 from app.infrastructure.web.deps import client_ip
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,8 @@ def key_prefix(request: Request) -> str:
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiException)
     async def handle_api_exception(request: Request, exc: ApiException) -> JSONResponse:
+        if isinstance(exc, RateLimitedError):
+            metrics.RATE_LIMITED.labels(exc.scope).inc()
         if exc.status_code in _AUDITED_STATUSES:
             audit.warning(
                 "%s status=%d ip=%s method=%s path=%s key=%s",

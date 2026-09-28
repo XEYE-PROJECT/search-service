@@ -5,9 +5,11 @@ el preflight OPTIONS de CORS, lo que arregla el bug del servicio original (los p
 recibían 401 antes de que CORS pudiera responder).
 
 Orden en la API pública: límite por IP (antes de mirar la key: acota los 401 de fuerza bruta)
-→ resolución de la key (401) → límite del USUARIO dueño de la key (todas sus keys y la consola
-comparten el cupo; el valor es el del plan por defecto o el que fijó un admin). Las cabeceras
-``X-RateLimit-*`` salen en cada respuesta autenticada y, con ``Retry-After``, en los 429.
+→ catálogos listos (si no, 503 ``SERVICE_NOT_READY``: sin catálogo no se puede saber si la key
+es válida, así que nunca un 401 engañoso) → resolución de la key (401) → límite del USUARIO
+dueño de la key (todas sus keys y la consola comparten el cupo; el valor es el del plan por
+defecto o el que fijó un admin). Las cabeceras ``X-RateLimit-*`` salen en cada respuesta
+autenticada y, con ``Retry-After``, en los 429.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from app.application.errors import (
     InvalidInternalTokenError,
     MissingApiKeyError,
     RateLimitedError,
+    ServiceNotReadyError,
 )
 from app.core.security import constant_time_equals
 from app.domain.models import ApiKeyInfo
@@ -37,6 +40,17 @@ def client_ip(request: Request) -> str:
     """IP del cliente. Detrás del proxy es la de ``X-Forwarded-For`` porque uvicorn corre con
     ``--proxy-headers`` y ``FORWARDED_ALLOW_IPS`` (ver Dockerfile); sin proxy, la del socket."""
     return request.client.host if request.client else "unknown"
+
+
+async def require_ready(request: Request) -> None:
+    """503 mientras el catálogo no esté cargado. Intenta una recarga inmediata (con throttle)
+    antes de rendirse: si el backend acaba de volver, la petición ya se sirve."""
+    catalog = request.app.state.container.catalog_service
+    if catalog.ready:
+        return
+    await catalog.refresh_on_miss()
+    if not catalog.ready:
+        raise ServiceNotReadyError()
 
 
 def enforce_user_limit(request: Request, response: Response, user_id: int) -> None:
@@ -61,6 +75,7 @@ async def require_api_key(
 
     if not x_api_key or not x_api_key.strip():
         raise MissingApiKeyError()
+    await require_ready(request)
     raw = x_api_key.strip()
     info = container.api_keys.resolve_raw(raw)
     if info is None and await container.catalog_service.refresh_on_miss():

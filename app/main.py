@@ -2,13 +2,15 @@
 
 Dos superficies: /api/v1/* es la API pública (X-API-Key) y /v1/* la interna
 (X-Internal-Token, solo el backend). El arranque hace bootstrap de los catálogos con
-reintentos, lanza el re-sync periódico y el consumidor de logs, y precalienta los modelos
-de embedding que anuncia el backend para que ninguna primera búsqueda pague la carga.
-Los datos de búsqueda de cada lista son perezosos: se cargan en la primera búsqueda y
-quedan en la caché LRU en RAM.
+reintentos, lanza el re-sync periódico, el consumidor de logs (con reenvío del spool en
+disco) y precalienta los modelos de embedding que anuncia el backend para que ninguna
+primera búsqueda pague la carga. Los datos de búsqueda de cada lista son perezosos: se
+cargan en la primera búsqueda y quedan en la caché LRU en RAM, con TTL y revalidación en
+segundo plano.
 
-Sondas: /health es liveness (el proceso responde) y /ready es readiness (503 hasta que el
-bootstrap contra el backend ha terminado): la que debe vigilar un monitor externo.
+Sondas: /health es liveness (el proceso responde; siempre 200, con el estado real dentro) y
+/ready es readiness (503 hasta que el bootstrap contra el backend ha terminado): la que debe
+vigilar un monitor externo. /metrics expone Prometheus (solo por la red docker).
 """
 
 from __future__ import annotations
@@ -18,17 +20,19 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
 from app.core.container import Container, build_container
 from app.core.logging import configure_logging
+from app.infrastructure import metrics
 from app.infrastructure.web.error_handlers import register_error_handlers
 from app.infrastructure.web.guards import RequestGuardMiddleware
 from app.infrastructure.web.internal_router import router as internal_router
 from app.infrastructure.web.public_router import router as public_router
+from app.infrastructure.web.request_context import RequestContextMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +99,7 @@ async def _periodic_refresh(container: Container) -> None:
         await asyncio.sleep(interval)
         try:
             await container.catalog_service.refresh()
+            container.list_data.reconcile()  # listas borradas cuya notificación se perdió
             await _preload_available_models(container)  # recoge modelos recién configurados
         except asyncio.CancelledError:
             raise
@@ -111,6 +116,7 @@ async def lifespan(app: FastAPI):
     tasks = [
         asyncio.create_task(_bootstrap_with_retry(container), name="bootstrap"),
         asyncio.create_task(container.log_queue.run(), name="log-consumer"),
+        asyncio.create_task(container.log_queue.replay(), name="log-spool-replay"),
     ]
     if settings.refresh_interval_seconds > 0:
         tasks.append(asyncio.create_task(_periodic_refresh(container), name="periodic-refresh"))
@@ -125,18 +131,17 @@ async def lifespan(app: FastAPI):
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
     try:
-        # Acotado: con el backend caído, los reintentos por lote pararían el apagado
-        # mientras quedaran logs encolados.
+        # Acotado: lo que no se entregue a tiempo va al spool en disco (no se pierde).
         await asyncio.wait_for(container.log_queue.flush(), timeout=10.0)
     except (Exception, asyncio.TimeoutError):
         logger.warning("Could not flush all pending search logs on shutdown "
-                       "(%d dropped)", container.log_queue.pending)
+                       "(%d still pending)", container.log_queue.pending)
     await container.aclose()
 
 
 def create_app(settings: Settings | None = None, container: Container | None = None) -> FastAPI:
     settings = settings or get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format_resolved)
     _init_sentry(settings)
 
     # Swagger/OpenAPI solo en desarrollo: en producción el esquema (que incluye la API
@@ -155,20 +160,23 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         app.state.container = container
 
     # La auth vive en dependencias (nunca corren en OPTIONS), así el preflight CORS funciona.
-    # Los middlewares se ejecutan en orden inverso al de registro: la guarda de Host/tamaño
-    # envuelve a CORS, así un Host falso se rechaza antes de nada.
+    # Los middlewares se ejecutan en orden inverso al de registro: request id/métricas
+    # envuelven a la guarda de Host/tamaño, que envuelve a CORS — un Host falso se rechaza
+    # antes de nada, pero aun así queda contado y con request id.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+        expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+                        "X-Request-Id", "X-Search-Degraded"],
     )
     app.add_middleware(
         RequestGuardMiddleware,
         allowed_hosts=settings.allowed_host_list,
         max_public_body_bytes=settings.max_request_bytes,
     )
+    app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
 
     @app.get("/", tags=["meta"])
@@ -181,20 +189,35 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         }
 
     @app.get("/health", tags=["meta"])
-    async def health():
-        """Liveness: el proceso atiende. Lo usa el healthcheck de docker."""
-        return {"status": "ok"}
+    async def health(request: Request):
+        """Liveness: el proceso atiende (siempre 200; lo usa el healthcheck de docker). El
+        cuerpo lleva el estado real: ``ready``, ``degraded`` y cada ``check``."""
+        current = getattr(request.app.state, "container", None)
+        if current is None:
+            return {"status": "ok", "ready": False, "degraded": False, "checks": {"catalog": "starting"}}
+        status = current.health()
+        return {"status": "ok", **status}
 
     @app.get("/ready", tags=["meta"])
     async def ready(request: Request):
         """Readiness: 200 solo con los catálogos cargados desde el backend (si no, 503).
-        Es la sonda para el monitor de uptime externo."""
+        Es la sonda para el monitor de uptime externo. ``degraded`` avisa de que se sirve,
+        pero peor (sin modelo de embedding, logs esperando en disco)."""
         current = getattr(request.app.state, "container", None)
-        is_ready = current is not None and current.catalog_service.ready
+        status = current.health() if current is not None else {"ready": False, "degraded": False, "checks": {}}
         return JSONResponse(
-            status_code=200 if is_ready else 503,
-            content={"status": "ready" if is_ready else "starting"},
+            status_code=200 if status["ready"] else 503,
+            content={"status": "ready" if status["ready"] else "starting", **status},
         )
+
+    if settings.metrics_enabled:
+        @app.get("/metrics", tags=["meta"], include_in_schema=False)
+        async def prometheus_metrics(request: Request):
+            current = getattr(request.app.state, "container", None)
+            if current is not None:
+                metrics.refresh_gauges(current)
+            body, content_type = metrics.render()
+            return Response(content=body, media_type=content_type)
 
     app.include_router(public_router)
     app.include_router(internal_router)

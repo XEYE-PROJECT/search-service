@@ -14,6 +14,8 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 |---|---|---|---|---|
 | `ENVIRONMENT` | `development` o `production` | `production` | **production** | — |
 | `LOG_LEVEL` | Nivel de log | `INFO` | opcional | — |
+| `LOG_FORMAT` | `auto` (json en production, text en development), `json` o `text`; en json cada línea lleva `request_id` | `auto` | `json` | — |
+| `METRICS_ENABLED` | `GET /metrics` (Prometheus); el proxy no lo publica, solo la red docker | `true` | opcional | — |
 | `SERVICE_NAME` / `SERVICE_VERSION` | Lo que anuncia `/` y OpenAPI | `xeye-search-service` / `2.0.0` | opcional | — |
 
 ## Integración con el backend (servidor a servidor)
@@ -23,7 +25,8 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 | `BACKEND_URL` | URL del backend por la red docker (`http://xeye-backend:8000`) | `http://localhost:8000` | **sí** | http(s), sin localhost |
 | `DOCKER_BACKEND_URL` | Solo `docker-compose.yml` de dev: la URL vista desde el contenedor | `http://xeye-java-backend:8000` | — | — |
 | `INTERNAL_TOKEN` 🔑 | Secreto compartido `X-Internal-Token` (= `SEARCH_INTERNAL_TOKEN` del backend) | `dev-internal-token` | **sí** | ≥ 32 chars, no dev |
-| `BACKEND_TIMEOUT_SECONDS` | Timeout de las llamadas al backend | `30` | opcional | — |
+| `BACKEND_TIMEOUT_SECONDS` / `BACKEND_CONNECT_TIMEOUT_SECONDS` | Timeouts de lectura / conexión de las llamadas al backend | `30` / `5` | opcional | — |
+| `BACKEND_RETRIES` | Reintentos con backoff de las lecturas idempotentes (bootstrap, datos de lista) ante fallos de red o 5xx | `2` | opcional | — |
 
 ## API pública (la llama el navegador con `X-API-Key`)
 
@@ -44,6 +47,7 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 | `EMBEDDING_MODEL_DEFAULT` | Fallback para listas sin modelo entrenado (horneado en la imagen) | MiniLM | recomendado | — |
 | `MODELS_MAX_LOADED` | Modelos sentence-transformers en RAM a la vez (LRU) | `2` | `1` en el VPS | — |
 | `CACHE_MAX_BYTES` | Tope de la caché LRU de listas | 1 GiB | ajustar a la RAM | — |
+| `CACHE_TTL_SECONDS` | Edad máxima de una lista cacheada antes de revalidarla en segundo plano (se sirve mientras tanto; si la revalidación falla, la respuesta lleva `degraded` + `stale_data`). 0 la desactiva | `3600` | opcional | — |
 | `EXACT_SEARCH_MAX_ELEMENTS` | Hasta aquí coseno exacto; por encima FAISS HNSW | `4096` | opcional | — |
 | `HNSW_M` / `HNSW_EF_CONSTRUCTION` / `HNSW_EF_SEARCH` | Parámetros HNSW | `32` / `200` / `96` | opcional | — |
 | `SEARCH_TEXT_WEIGHT` / `SEARCH_SEMANTIC_WEIGHT` / `SCORE_OVERRIDE_THRESHOLD` | Puntuación híbrida | `0.25` / `0.75` / `0.75` | opcional | — |
@@ -55,6 +59,8 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 | `REFRESH_INTERVAL_SECONDS` | Re-sync completo periódico (0 desactiva) | `3600` | opcional | — |
 | `REFRESH_MIN_INTERVAL_SECONDS` | Throttle del re-sync por miss | `30` | opcional | — |
 | `LOG_QUEUE_MAX` / `LOG_BATCH_MAX` / `LOG_FLUSH_SECONDS` / `LOG_PUSH_RETRIES` | Cola de logs hacia el backend | `10000` / `50` / `2.0` / `3` | opcional | — |
+| `LOG_SPOOL_DIR` | Spool en disco (JSONL) de los logs que no se pudieron entregar; se reenvían solos. Vacío = descartar. La imagen fija `/app/data/log-spool` (montar volumen) | `data/log-spool` | volumen en `/app/data` | — |
+| `LOG_SPOOL_MAX_BYTES` / `LOG_SPOOL_REPLAY_SECONDS` | Tope del spool (se descartan los más antiguos) / cadencia del reenvío | 50 MiB / `30` | opcional | — |
 
 ## Observabilidad
 
@@ -62,6 +68,18 @@ Valida = lo comprueba el validador de `Settings` al arrancar en `production`.
 |---|---|---|---|---|
 | `SENTRY_DSN` | DSN del proyecto `xeye-search-service` (vacío = desactivado) | vacío | recomendado | — |
 | `SENTRY_RELEASE` | Commit desplegado; lo fija el Dockerfile (`GIT_SHA`) | vacío | automático | — |
+
+## Sondas y métricas
+
+- `GET /health`: liveness (siempre 200 si el proceso atiende; healthcheck de docker). El cuerpo
+  lleva `ready`, `degraded` y `checks` (`catalog`, `embedding_model`, `search_logs`).
+- `GET /ready`: readiness (503 hasta cargar los catálogos del backend); mismo cuerpo. Es la
+  sonda del monitor de uptime.
+- `GET /metrics`: Prometheus (`xeye_search_*`: peticiones y latencias por ruta, búsquedas
+  ok/degradadas, motivos de degradación, 429 por ámbito, llamadas al backend, eventos de
+  caché, gauges de caché/catálogo/colas). Solo por la red docker.
+- Toda respuesta lleva `X-Request-Id` (se respeta el del proxy si es sano) y cada línea de log
+  de esa petición lo incluye; las búsquedas degradadas llevan `X-Search-Degraded: true`.
 
 ## Qué NO sale nunca en los logs
 

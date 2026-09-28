@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from app.application.ports import ListDataPayload
 from app.domain.models import ListMeta
-from app.infrastructure.web.deps import enforce_user_limit, require_internal_token
+from app.infrastructure.web.deps import enforce_user_limit, require_internal_token, require_ready
+from app.infrastructure.web.public_router import mark_degraded
 from app.infrastructure.web.schemas import (
     ApiKeyUpsertRequest,
     ConsoleSearchRequest,
@@ -32,13 +33,17 @@ router = APIRouter(prefix="/v1", tags=["internal"], dependencies=[Depends(requir
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request):
     container = request.app.state.container
+    status = container.health()
     return HealthResponse(
-        ready=container.catalog_service.ready,
+        ready=status["ready"],
+        degraded=status["degraded"],
+        checks=status["checks"],
         api_keys=len(container.api_keys),
         lists=len(container.lists),
         lists_cached=len(container.cache),
         cache_bytes=container.cache.total_bytes,
         logs_pending=container.log_queue.pending,
+        logs_spooled=container.log_queue.spooled,
     )
 
 
@@ -48,12 +53,15 @@ async def console_search(request: Request, response: Response, list_id: int, bod
     lista pertenece al usuario autenticado): sirve también listas privadas, sin API key y sin
     log de búsqueda. Cuenta contra el cupo por usuario igual que la API pública."""
     container = request.app.state.container
+    await require_ready(request)
     meta = await container.search.resolve_list_by_id(list_id)
     enforce_user_limit(request, response, meta.user_id)
-    return await container.search.search(
+    result = await container.search.search(
         meta, None, body.search_term, body.limit,
         include_breakdown=body.include_score_breakdown, register_log=False,
     )
+    mark_degraded(response, result)
+    return result
 
 
 @router.post("/lists/{list_id}/index", response_model=InternalAck)
@@ -131,6 +139,16 @@ async def delete_user(request: Request, user_id: int):
 
 @router.post("/refresh", response_model=InternalAck)
 async def refresh(request: Request):
-    """Operativo: fuerza un re-sync completo del catálogo desde el backend."""
-    await request.app.state.container.catalog_service.refresh()
-    return InternalAck(message="catalog refreshed")
+    """Operativo: fuerza un re-sync completo del catálogo desde el backend (y descarta de la
+    caché las listas que ya no existen)."""
+    container = request.app.state.container
+    await container.catalog_service.refresh()
+    dropped = container.list_data.reconcile()
+    return InternalAck(message=f"catalog refreshed ({dropped} stale cached lists dropped)")
+
+
+@router.post("/logs/replay", response_model=InternalAck)
+async def replay_logs(request: Request):
+    """Operativo: reenvía ahora los logs de búsqueda spooleados en disco."""
+    sent = await request.app.state.container.log_queue.replay_once()
+    return InternalAck(message=f"{sent} spooled search-log entries replayed")

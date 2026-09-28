@@ -16,9 +16,14 @@ services:
         # También pre-descarga este modelo dentro de la imagen (ver Dockerfile).
         EMBEDDING_MODEL_DEFAULT: ${EMBEDDING_MODEL_DEFAULT:-paraphrase-multilingual-MiniLM-L12-v2}
     container_name: xeye-search-service
+    restart: unless-stopped
+    # Dos modelos cargados (MODELS_MAX_LOADED=2) + caché de búsqueda: en dev, 2 GB de tope.
+    mem_limit: ${SEARCH_SERVICE_MEM_LIMIT:-2048m}
+    stop_grace_period: 20s
     environment:
       # Compose de DESARROLLO: en producción manda xeye-infra (ENVIRONMENT=production).
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_FORMAT: ${LOG_FORMAT:-auto}
       # URL del backend vista desde el contenedor (ver cabecera — a propósito no ${BACKEND_URL}).
       BACKEND_URL: ${DOCKER_BACKEND_URL:-http://xeye-java-backend:8000}
       # Sin fallback silencioso: el .env debe definirlo (dev-internal-token vale en development).
@@ -28,6 +33,7 @@ services:
       EMBEDDING_MODEL_DEFAULT: ${EMBEDDING_MODEL_DEFAULT:-paraphrase-multilingual-MiniLM-L12-v2}
       MODELS_MAX_LOADED: ${MODELS_MAX_LOADED:-2}
       CACHE_MAX_BYTES: ${CACHE_MAX_BYTES:-1073741824}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
       EXACT_SEARCH_MAX_ELEMENTS: ${EXACT_SEARCH_MAX_ELEMENTS:-4096}
       SEARCH_TEXT_WEIGHT: ${SEARCH_TEXT_WEIGHT:-0.25}
       SEARCH_SEMANTIC_WEIGHT: ${SEARCH_SEMANTIC_WEIGHT:-0.75}
@@ -46,6 +52,9 @@ services:
       - "${SEARCH_SERVICE_PORT:-8002}:8002"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Spool en disco de los logs de búsqueda no entregados: sobrevive a los reinicios.
+      - search_log_spool:/app/data
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
       interval: 15s
@@ -54,6 +63,9 @@ services:
       start_period: 30s
     networks:
       - xeye-network
+
+volumes:
+  search_log_spool:
 
 networks:
   xeye-network:
