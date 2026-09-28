@@ -1,5 +1,6 @@
 # XEYE search-service — imagen solo CPU, proceso sin privilegios.
-FROM python:3.11-slim
+# Base fijada por digest (Dependabot abre PR cuando cambia): builds reproducibles.
+FROM python:3.11-slim@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

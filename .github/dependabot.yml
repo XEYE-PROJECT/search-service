@@ -1,0 +1,32 @@
+# Dependabot: PRs semanales (lunes) para las actions (fijadas por SHA), las dependencias Python
+# (requirements.txt + requirements.lock) y la imagen base del Dockerfile (fijada por digest).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # torch y sentence-transformers cambian el comportamiento de los embeddings: a mano y
+      # regenerando requirements.lock (README).
+      - dependency-name: torch
+      - dependency-name: sentence-transformers
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
