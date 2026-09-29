@@ -1,0 +1,10 @@
+# Configuración de gitleaks (CI y pre-commit). Hereda las reglas por defecto y solo añade
+# allowlists de rutas que contienen ejemplos, nunca secretos reales.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixtures de contrato con el backend: hashes de ejemplo y un token de webhook derivado del secreto de los tests de integración del backend"
+paths = [
+  '''tests/contracts/.*''',
+]
