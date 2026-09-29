@@ -16,6 +16,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
+from typing import Any, Protocol
 
 import anyio
 import numpy as np
@@ -41,7 +42,8 @@ def decode_embeddings(embeddings_b64: str | None, expected_rows: int) -> np.ndar
     if matrix.ndim != 2 or matrix.shape[0] != expected_rows:
         logger.warning(
             "Embeddings shape %s does not match %d elements; using text-only search",
-            getattr(matrix, "shape", None), expected_rows,
+            getattr(matrix, "shape", None),
+            expected_rows,
         )
         return None
     return np.ascontiguousarray(matrix, dtype=np.float32)
@@ -63,6 +65,13 @@ def parse_model_name(model_field: str | None) -> str | None:
     return name
 
 
+class SentenceEncoder(Protocol):
+    """Lo que este módulo usa de ``SentenceTransformer`` (importado perezosamente al cargar,
+    así el tipo no ata el módulo al paquete y los tests pueden inyectar un doble)."""
+
+    def encode(self, sentences: str, *, convert_to_numpy: bool = ..., show_progress_bar: bool = ...) -> Any: ...
+
+
 class ModelLoadError(Exception):
     pass
 
@@ -81,7 +90,7 @@ class ModelRegistry:
     def __init__(self, default_model: str, max_loaded: int = 2) -> None:
         self._default_model = default_model
         self._max_loaded = max(1, max_loaded)
-        self._models: OrderedDict[str, tuple[object, threading.Lock]] = OrderedDict()
+        self._models: OrderedDict[str, tuple[SentenceEncoder, threading.Lock]] = OrderedDict()
         self._name_locks: dict[str, asyncio.Lock] = {}
         self._failed_at: dict[str, float] = {}
 
@@ -122,7 +131,8 @@ class ModelRegistry:
             logger.warning(
                 "Preloading %d embedding models with only %d cache slots (MODELS_MAX_LOADED); "
                 "some will be evicted and reloaded on first use",
-                len(self._models) + len(to_load), self._max_loaded,
+                len(self._models) + len(to_load),
+                self._max_loaded,
             )
         for name in to_load:
             try:
@@ -152,7 +162,7 @@ class ModelRegistry:
 
         return await anyio.to_thread.run_sync(_encode)
 
-    async def _get(self, name: str) -> tuple[object, threading.Lock]:
+    async def _get(self, name: str) -> tuple[SentenceEncoder, threading.Lock]:
         entry = self._models.get(name)
         if entry is not None:
             self._models.move_to_end(name)
@@ -167,7 +177,7 @@ class ModelRegistry:
             if failed_at is not None and time.monotonic() - failed_at < self._FAILURE_TTL_SECONDS:
                 raise ModelLoadError(name)
 
-            def _load() -> object:
+            def _load() -> SentenceEncoder:
                 from sentence_transformers import SentenceTransformer
 
                 logger.info("Loading embedding model %s", name)
@@ -184,8 +194,9 @@ class ModelRegistry:
                 model = await anyio.to_thread.run_sync(_load)
             except Exception as exc:
                 self._failed_at[name] = time.monotonic()
-                logger.error("Loading embedding model %s failed (retry in %.0fs): %s",
-                             name, self._FAILURE_TTL_SECONDS, exc)
+                logger.error(
+                    "Loading embedding model %s failed (retry in %.0fs): %s", name, self._FAILURE_TTL_SECONDS, exc
+                )
                 raise ModelLoadError(name) from exc
             self._failed_at.pop(name, None)
             self._models[name] = (model, threading.Lock())

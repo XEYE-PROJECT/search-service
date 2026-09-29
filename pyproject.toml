@@ -1,0 +1,44 @@
+# Configuración de las herramientas de calidad (ruff, mypy, pytest). El paquete no se instala
+# (la imagen copia `app/` y `requirements.lock`), así que aquí no hay `[project]`.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+# `evaluation/` es un paquete aparte (scripts para la memoria del TFG); se lintea igual, pero
+# los tests y el mypy solo cubren `app`.
+extend-exclude = [".venv", "evaluation/results"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Importa fixtures de test_api para que pytest las descubra; ruff las ve como "redefinidas"
+# al usarlas como parámetros de los tests.
+"tests/test_observability.py" = ["F811"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# La raíz del repo en sys.path: `pytest` a secas (CI) no la añade, `python -m pytest` sí.
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]

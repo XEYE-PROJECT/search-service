@@ -97,8 +97,7 @@ class SearchLogQueue:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.info("Backend still unavailable for spooled search logs (%d waiting): %s",
-                            len(entries), exc)
+                logger.info("Backend still unavailable for spooled search logs (%d waiting): %s", len(entries), exc)
                 break
             await self._spool.discard(path)
             sent += len(entries)
@@ -127,7 +126,7 @@ class SearchLogQueue:
                 break
             try:
                 batch.append(await asyncio.wait_for(self._queue.get(), timeout))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         return batch
 

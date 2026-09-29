@@ -78,9 +78,7 @@ def summarize(queries: list[dict]) -> dict:
         "avg_duration_ms": sum(durations) / len(durations) if durations else None,
         "p95_duration_ms": percentile(durations, 95),
         "semantic_contribution": (
-            sum(1 for flag in semantic_flags if flag) / len(semantic_flags)
-            if semantic_flags
-            else None
+            sum(1 for flag in semantic_flags if flag) / len(semantic_flags) if semantic_flags else None
         ),
     }
     categories = sorted({q["category"] for q in queries if q.get("category")})

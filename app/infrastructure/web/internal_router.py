@@ -57,8 +57,12 @@ async def console_search(request: Request, response: Response, list_id: int, bod
     meta = await container.search.resolve_list_by_id(list_id)
     enforce_user_limit(request, response, meta.user_id)
     result = await container.search.search(
-        meta, None, body.search_term, body.limit,
-        include_breakdown=body.include_score_breakdown, register_log=False,
+        meta,
+        None,
+        body.search_term,
+        body.limit,
+        include_breakdown=body.include_score_breakdown,
+        register_log=False,
     )
     mark_degraded(response, result)
     return result
@@ -75,8 +79,7 @@ async def index_list(request: Request, list_id: int, body: IndexPushRequest):
     payload = ListDataPayload(
         meta=ListMeta(id=list_id, user_id=body.user_id, name=body.list_name, is_public=body.is_public),
         elements=[
-            {"id": e.id, "text": e.text or "", "params": e.params, "description": e.description}
-            for e in body.elements
+            {"id": e.id, "text": e.text or "", "params": e.params, "description": e.description} for e in body.elements
         ],
         embeddings_data=body.embeddings_data,
         model=body.model,
@@ -90,9 +93,7 @@ async def index_list(request: Request, list_id: int, body: IndexPushRequest):
 async def update_list_meta(request: Request, list_id: int, body: ListMetaUpdateRequest):
     """Renombrado / cambio de visibilidad: actualiza el catálogo; la caché sigue valiendo."""
     container = request.app.state.container
-    container.lists.upsert(
-        ListMeta(id=list_id, user_id=body.user_id, name=body.name, is_public=body.is_public)
-    )
+    container.lists.upsert(ListMeta(id=list_id, user_id=body.user_id, name=body.name, is_public=body.is_public))
     return InternalAck(message=f"list {list_id} meta updated")
 
 

@@ -1,0 +1,35 @@
+{
+  "apiKeys": [
+    {
+      "id": 1,
+      "userId": 3,
+      "keyHash": "0cf27b5535b80745903ae81b0c3676b81134631dee2cbb8333c38bf7c4c30353"
+    }
+  ],
+  "apiKeysNextAfterId": null,
+  "lists": [
+    {
+      "id": 7,
+      "userId": 3,
+      "name": "Herramientas",
+      "isPublic": true
+    },
+    {
+      "id": 8,
+      "userId": 3,
+      "name": "Privada",
+      "isPublic": false
+    }
+  ],
+  "listsNextAfterId": null,
+  "embeddingModels": [
+    "paraphrase-multilingual-MiniLM-L12-v2",
+    "paraphrase-multilingual-mpnet-base-v2"
+  ],
+  "userLimits": [
+    {
+      "userId": 3,
+      "rateLimitPerMinute": 120
+    }
+  ]
+}

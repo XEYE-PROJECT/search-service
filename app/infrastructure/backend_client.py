@@ -104,9 +104,7 @@ class BackendClient:
             for entry in body.get("userLimits") or []
             if entry.get("rateLimitPerMinute")
         ]
-        return BootstrapData(
-            api_keys=api_keys, lists=lists, embedding_models=embedding_models, user_limits=user_limits
-        )
+        return BootstrapData(api_keys=api_keys, lists=lists, embedding_models=embedding_models, user_limits=user_limits)
 
     async def _fetch_keyset_pages(self, path: str, next_after_id: int | None) -> list[dict]:
         """Recorre ``{items, nextAfterId}`` hasta que ``nextAfterId`` sea nulo."""

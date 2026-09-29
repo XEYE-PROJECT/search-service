@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,20 +34,23 @@ from app.infrastructure.web.internal_router import router as internal_router
 from app.infrastructure.web.public_router import router as public_router
 from app.infrastructure.web.request_context import RequestContextMiddleware
 
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
+
 logger = logging.getLogger(__name__)
 
 #: Cabeceras que nunca deben salir hacia Sentry aunque el SDK capture la petición.
 _SENSITIVE_HEADERS = frozenset({"x-api-key", "x-internal-token", "authorization", "cookie"})
 
 
-def _scrub_sensitive_headers(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+def _scrub_sensitive_headers(event: Event, _hint: Hint) -> Event | None:
     request = event.get("request")
-    if isinstance(request, dict) and isinstance(request.get("headers"), dict):
-        request["headers"] = {
-            name: value
-            for name, value in request["headers"].items()
-            if name.lower() not in _SENSITIVE_HEADERS
-        }
+    if isinstance(request, dict):
+        headers = request.get("headers")
+        if isinstance(headers, dict):
+            request["headers"] = {
+                name: value for name, value in headers.items() if name.lower() not in _SENSITIVE_HEADERS
+            }
     return event
 
 
@@ -65,8 +68,7 @@ def _init_sentry(settings: Settings) -> None:
         send_default_pii=False,
         before_send=_scrub_sensitive_headers,
     )
-    logger.info("Sentry enabled (environment=%s, release=%s)",
-                settings.environment, settings.sentry_release or "-")
+    logger.info("Sentry enabled (environment=%s, release=%s)", settings.environment, settings.sentry_release or "-")
 
 
 async def _preload_available_models(container: Container) -> None:
@@ -133,9 +135,10 @@ async def lifespan(app: FastAPI):
     try:
         # Acotado: lo que no se entregue a tiempo va al spool en disco (no se pierde).
         await asyncio.wait_for(container.log_queue.flush(), timeout=10.0)
-    except (Exception, asyncio.TimeoutError):
-        logger.warning("Could not flush all pending search logs on shutdown "
-                       "(%d still pending)", container.log_queue.pending)
+    except (TimeoutError, Exception):
+        logger.warning(
+            "Could not flush all pending search logs on shutdown (%d still pending)", container.log_queue.pending
+        )
     await container.aclose()
 
 
@@ -168,8 +171,14 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         allow_origins=settings.cors_origin_list,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
-                        "X-Request-Id", "X-Search-Degraded"],
+        expose_headers=[
+            "Retry-After",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "X-Request-Id",
+            "X-Search-Degraded",
+        ],
     )
     app.add_middleware(
         RequestGuardMiddleware,
@@ -211,6 +220,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         )
 
     if settings.metrics_enabled:
+
         @app.get("/metrics", tags=["meta"], include_in_schema=False)
         async def prometheus_metrics(request: Request):
             current = getattr(request.app.state, "container", None)

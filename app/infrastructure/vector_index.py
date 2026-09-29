@@ -77,11 +77,7 @@ class VectorIndex:
                 order = shortlist[np.argsort(-scores[shortlist])]
             return {int(i): float(scores[i]) for i in order}
         distances, indices = self._hnsw.search(query.reshape(1, -1), k)
-        return {
-            int(i): float(np.clip(d, 0.0, 1.0))
-            for i, d in zip(indices[0], distances[0])
-            if i >= 0
-        }
+        return {int(i): float(np.clip(d, 0.0, 1.0)) for i, d in zip(indices[0], distances[0], strict=True) if i >= 0}
 
     def scores_for_rows(self, query: np.ndarray, rows: list[int]) -> dict[int, float]:
         """Coseno exacto de filas concretas (para los candidatos por texto)."""
@@ -89,4 +85,4 @@ class VectorIndex:
             return {}
         picked = self.matrix[rows] @ np.asarray(query, dtype=np.float32)
         picked = np.clip(picked, 0.0, 1.0)
-        return {row: float(score) for row, score in zip(rows, picked)}
+        return {row: float(score) for row, score in zip(rows, picked, strict=True)}

@@ -19,11 +19,11 @@ from prometheus_client import (
 
 _NUMERIC_SEGMENT = re.compile(r"/\d+")
 
-HTTP_REQUESTS = Counter(
-    "xeye_search_http_requests_total", "HTTP requests served", ["method", "path", "status"]
-)
+HTTP_REQUESTS = Counter("xeye_search_http_requests_total", "HTTP requests served", ["method", "path", "status"])
 HTTP_DURATION = Histogram(
-    "xeye_search_http_request_duration_seconds", "HTTP request latency", ["method", "path"],
+    "xeye_search_http_request_duration_seconds",
+    "HTTP request latency",
+    ["method", "path"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
 SEARCHES = Counter("xeye_search_searches_total", "Searches executed", ["surface", "outcome"])
@@ -32,9 +32,7 @@ RATE_LIMITED = Counter("xeye_search_rate_limited_total", "Requests rejected with
 BACKEND_REQUESTS = Counter(
     "xeye_search_backend_requests_total", "Calls to the backend internal API", ["operation", "outcome"]
 )
-CATALOG_REFRESHES = Counter(
-    "xeye_search_catalog_refreshes_total", "Catalog refreshes against the backend", ["outcome"]
-)
+CATALOG_REFRESHES = Counter("xeye_search_catalog_refreshes_total", "Catalog refreshes against the backend", ["outcome"])
 CACHE_EVENTS = Counter("xeye_search_cache_events_total", "List cache events", ["event"])
 LOG_SPOOLED = Counter("xeye_search_log_spooled_total", "Search-log entries written to the disk spool")
 LOG_DROPPED = Counter("xeye_search_log_dropped_total", "Search-log entries dropped for good")

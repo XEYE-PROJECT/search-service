@@ -49,8 +49,12 @@ def register_error_handlers(app: FastAPI) -> None:
         if exc.status_code in _AUDITED_STATUSES:
             audit.warning(
                 "%s status=%d ip=%s method=%s path=%s key=%s",
-                exc.code, exc.status_code, client_ip(request), request.method,
-                request.url.path, key_prefix(request),
+                exc.code,
+                exc.status_code,
+                client_ip(request),
+                request.method,
+                request.url.path,
+                key_prefix(request),
             )
         return JSONResponse(status_code=exc.status_code, content=exc.to_body(), headers=exc.headers)
 
@@ -71,15 +75,22 @@ def register_error_handlers(app: FastAPI) -> None:
         code = _HTTP_CODES.get(status, "HTTP_ERROR")
         message = str(exc.detail) if exc.detail else code.replace("_", " ").capitalize()
         if status in _AUDITED_STATUSES:
-            audit.warning("%s status=%d ip=%s method=%s path=%s key=%s", code, status,
-                          client_ip(request), request.method, request.url.path, key_prefix(request))
-        return JSONResponse(status_code=status, content=error_body(status, code, message),
-                            headers=dict(exc.headers or {}))
+            audit.warning(
+                "%s status=%d ip=%s method=%s path=%s key=%s",
+                code,
+                status,
+                client_ip(request),
+                request.method,
+                request.url.path,
+                key_prefix(request),
+            )
+        return JSONResponse(
+            status_code=status, content=error_body(status, code, message), headers=dict(exc.headers or {})
+        )
 
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         # Starlette relanza la excepción tras enviar esta respuesta: el stack sigue llegando a
         # los logs de uvicorn y a Sentry; al cliente solo le llega el sobre genérico.
         logger.error("Unhandled error on %s %s: %s", request.method, request.url.path, exc)
-        return JSONResponse(status_code=500,
-                            content=error_body(500, "INTERNAL_ERROR", "Unexpected error"))
+        return JSONResponse(status_code=500, content=error_body(500, "INTERNAL_ERROR", "Unexpected error"))

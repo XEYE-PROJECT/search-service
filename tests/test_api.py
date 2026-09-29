@@ -147,18 +147,22 @@ class TestPublicErrors:
         # El antiguo allow_private ya no existe: es un campo desconocido -> 422, y la lista
         # privada sigue siendo 403 por mucho que el cliente lo pida.
         seeded_backend.list_payloads[6] = camera_payload()
-        assert_error(await search(ready_client, "camara", list_name="Privada", allow_private=True),
-                     422, "VALIDATION_FAILED")
+        assert_error(
+            await search(ready_client, "camara", list_name="Privada", allow_private=True), 422, "VALIDATION_FAILED"
+        )
         assert_error(await search(ready_client, "camara", list_name="Privada"), 403, "LIST_NOT_PUBLIC")
 
-    @pytest.mark.parametrize("payload", [
-        {"list_name": "Cámaras", "search_term": "   "},
-        {"list_name": "  ", "search_term": "x"},
-        {"list_name": "Cámaras", "search_term": ""},
-        {"list_name": "Cámaras", "search_term": "x", "limit": 0},
-        {"list_name": "Cámaras", "search_term": "x", "session": ""},
-        {"list_name": "Cámaras", "search_term": "x", "unknown": 1},
-    ])
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"list_name": "Cámaras", "search_term": "   "},
+            {"list_name": "  ", "search_term": "x"},
+            {"list_name": "Cámaras", "search_term": ""},
+            {"list_name": "Cámaras", "search_term": "x", "limit": 0},
+            {"list_name": "Cámaras", "search_term": "x", "session": ""},
+            {"list_name": "Cámaras", "search_term": "x", "unknown": 1},
+        ],
+    )
     async def test_strict_body_validation_422(self, ready_client, payload):
         response = await ready_client.post("/api/v1/search", headers={"X-API-Key": API_KEY}, json=payload)
         body = assert_error(response, 422, "VALIDATION_FAILED")
@@ -189,9 +193,16 @@ class TestPublicErrors:
             response = await client.post("/api/v1/search", headers={"X-API-Key": API_KEY}, json=big)
             assert_error(response, 413, "REQUEST_TOO_LARGE")
             # La API interna no se limita (el push de índice lleva embeddings).
-            push = {"userId": 10, "listName": "Grande", "isPublic": True, "embeddingsData": None,
-                    "model": None, "elements": [{"id": i, "text": f"elemento {i}", "params": None,
-                                                 "description": None} for i in range(50)]}
+            push = {
+                "userId": 10,
+                "listName": "Grande",
+                "isPublic": True,
+                "embeddingsData": None,
+                "model": None,
+                "elements": [
+                    {"id": i, "text": f"elemento {i}", "params": None, "description": None} for i in range(50)
+                ],
+            }
             assert (await client.post("/v1/lists/9/index", headers=INTERNAL, json=push)).status_code == 200
 
     async def test_untrusted_host_400(self, seeded_backend, seeded_embedder):
@@ -284,8 +295,11 @@ class TestPublicErrors:
             assert (await search(client, "c")).headers["x-ratelimit-limit"] == "1000"
             await client.put("/v1/users/10/limits", headers=INTERNAL, json={"rateLimitPerMinute": 5})
             assert (await search(client, "d")).headers["x-ratelimit-limit"] == "5"
-            assert_error(await client.put("/v1/users/10/limits", headers=INTERNAL, json={"rateLimitPerMinute": 0}),
-                         422, "VALIDATION_FAILED")
+            assert_error(
+                await client.put("/v1/users/10/limits", headers=INTERNAL, json={"rateLimitPerMinute": 0}),
+                422,
+                "VALIDATION_FAILED",
+            )
 
     async def test_ip_rate_limit_applies_before_the_key(self, seeded_backend, seeded_embedder):
         import httpx
@@ -333,21 +347,18 @@ class TestPublicErrors:
 class TestInternalApi:
     async def test_internal_requires_token(self, ready_client):
         assert (await ready_client.post("/v1/lists/5/invalidate")).status_code == 403
-        assert (
-            await ready_client.post("/v1/lists/5/invalidate", headers=INTERNAL)
-        ).status_code == 200
+        assert (await ready_client.post("/v1/lists/5/invalidate", headers=INTERNAL)).status_code == 200
 
     async def test_internal_rejects_wrong_or_partial_token(self, ready_client):
         for token in ("nope", "test-toke", "test-token ", "TEST-TOKEN", ""):
-            response = await ready_client.post(
-                "/v1/lists/5/invalidate", headers={"X-Internal-Token": token}
-            )
+            response = await ready_client.post("/v1/lists/5/invalidate", headers={"X-Internal-Token": token})
             assert_error(response, 403, "INTERNAL_TOKEN_INVALID")
 
     async def test_console_search_serves_private_lists_without_api_key(self, ready_client, container, seeded_backend):
         seeded_backend.list_payloads[6] = camera_payload(list_id=6, name="Privada")
         response = await ready_client.post(
-            "/v1/lists/6/search", headers=INTERNAL,
+            "/v1/lists/6/search",
+            headers=INTERNAL,
             json={"search_term": "camara", "limit": 5, "include_score_breakdown": True},
         )
         assert response.status_code == 200
@@ -356,11 +367,18 @@ class TestInternalApi:
         assert "text_score" in body["results"][0]
         assert response.headers["x-ratelimit-limit"]  # cuenta contra el cupo del dueño
         assert container.log_queue.pending == 0  # la consola no genera logs de búsqueda
-        assert_error(await ready_client.post("/v1/lists/999/search", headers=INTERNAL, json={"search_term": "x"}),
-                     404, "LIST_NOT_FOUND")
-        assert_error(await ready_client.post("/v1/lists/6/search", headers=INTERNAL,
-                                             json={"search_term": "x", "allow_private": True}),
-                     422, "VALIDATION_FAILED")
+        assert_error(
+            await ready_client.post("/v1/lists/999/search", headers=INTERNAL, json={"search_term": "x"}),
+            404,
+            "LIST_NOT_FOUND",
+        )
+        assert_error(
+            await ready_client.post(
+                "/v1/lists/6/search", headers=INTERNAL, json={"search_term": "x", "allow_private": True}
+            ),
+            422,
+            "VALIDATION_FAILED",
+        )
         assert (await ready_client.post("/v1/lists/6/search", json={"search_term": "x"})).status_code == 403
 
     async def test_console_search_shares_the_user_quota(self, seeded_backend, seeded_embedder):
@@ -404,8 +422,13 @@ class TestInternalApi:
             "embeddingsData": None,
             "model": None,
             "elements": [
-                {"id": 1, "text": "Bicicleta de montaña", "params": None,
-                 "description": None, "generatedDescription": None},
+                {
+                    "id": 1,
+                    "text": "Bicicleta de montaña",
+                    "params": None,
+                    "description": None,
+                    "generatedDescription": None,
+                },
             ],
         }
         response = await ready_client.post("/v1/lists/7/index", headers=INTERNAL, json=push)
@@ -417,10 +440,12 @@ class TestInternalApi:
 
     async def test_index_push_with_bad_embeddings_degrades(self, ready_client):
         push = {
-            "userId": 10, "listName": "Rota", "isPublic": True,
-            "embeddingsData": "bm90LW5weQ==", "model": None,
-            "elements": [{"id": 1, "text": "Algo", "params": None,
-                          "description": None, "generatedDescription": None}],
+            "userId": 10,
+            "listName": "Rota",
+            "isPublic": True,
+            "embeddingsData": "bm90LW5weQ==",
+            "model": None,
+            "elements": [{"id": 1, "text": "Algo", "params": None, "description": None, "generatedDescription": None}],
         }
         response = await ready_client.post("/v1/lists/8/index", headers=INTERNAL, json=push)
         assert response.status_code == 200  # nunca 5xx: degrada a solo texto
@@ -441,7 +466,8 @@ class TestInternalApi:
         seeded_backend.lists[0] = ListMeta(id=5, user_id=10, name="Fotografía", is_public=True)
         seeded_backend.list_payloads[5] = camera_payload(name="Fotografía")
         await ready_client.put(
-            "/v1/lists/5/meta", headers=INTERNAL,
+            "/v1/lists/5/meta",
+            headers=INTERNAL,
             json={"userId": 10, "name": "Fotografía", "isPublic": True},
         )
         assert (await search(ready_client, "camara", list_name="Fotografía")).status_code == 200
@@ -449,7 +475,8 @@ class TestInternalApi:
 
     async def test_visibility_off_makes_list_private(self, ready_client):
         await ready_client.put(
-            "/v1/lists/5/meta", headers=INTERNAL,
+            "/v1/lists/5/meta",
+            headers=INTERNAL,
             json={"userId": 10, "name": "Cámaras", "isPublic": False},
         )
         assert (await search(ready_client, "camara")).status_code == 403
@@ -465,7 +492,8 @@ class TestInternalApi:
 
     async def test_api_key_upsert_and_delete(self, ready_client):
         await ready_client.put(
-            "/v1/api-keys/9", headers=INTERNAL,
+            "/v1/api-keys/9",
+            headers=INTERNAL,
             json={"userId": 10, "keyHash": hash_api_key("xeye_new-key")},
         )
         assert (await search(ready_client, "camara", key="xeye_new-key")).status_code == 200
@@ -475,7 +503,8 @@ class TestInternalApi:
     async def test_api_key_upsert_accepts_transitional_raw_key(self, ready_client):
         # Backend anterior a las keys hasheadas: manda apiKey en claro y se hashea aquí.
         await ready_client.put(
-            "/v1/api-keys/9", headers=INTERNAL,
+            "/v1/api-keys/9",
+            headers=INTERNAL,
             json={"userId": 10, "apiKey": "xeye_legacy-key"},
         )
         assert (await search(ready_client, "camara", key="xeye_legacy-key")).status_code == 200

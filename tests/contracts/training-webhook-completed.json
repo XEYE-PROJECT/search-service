@@ -1,0 +1,24 @@
+{
+  "training_id": 42,
+  "list_id": 7,
+  "status": "completed",
+  "embeddings_data": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGY0JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDQpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIArNzMw9zcxMPpqZmT7NzMw+AAAAP5qZGT8zMzM/zcxMPw==",
+  "model": "{\"embedding_model\": \"paraphrase-multilingual-MiniLM-L12-v2\", \"llm_model\": \"llama-3.3-70b-versatile\", \"strategy\": \"default\", \"dimension\": 4, \"list_id\": 7}",
+  "element_ids": [
+    101,
+    102
+  ],
+  "generated_descriptions": {
+    "101": "{\"v\": 1, \"summary\": [\"Martillo de carpintero con mango de madera\"], \"queries\": [\"martillo madera\", \"martillo carpintero 500 g\"], \"model\": \"llama-3.3-70b-versatile\"}"
+  },
+  "described_count": 2,
+  "time": {
+    "optimizing_seconds": 3,
+    "training_seconds": 2,
+    "total_seconds": 5
+  },
+  "cost": {
+    "runpod": 0.000694,
+    "total": 0.000694
+  }
+}

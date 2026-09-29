@@ -79,9 +79,7 @@ class Settings(BaseSettings):
     #: Cabeceras Host aceptadas (TrustedHost): el dominio público, el nombre del contenedor
     #: (backend por la red docker) y localhost (healthcheck). "*" = cualquiera (solo desarrollo).
     allowed_hosts: str = "*"
-    cors_origins: str = (
-        "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173"
-    )
+    cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173"
 
     # Sincronización de catálogos.
     refresh_interval_seconds: int = 3600  # re-sync completo periódico; 0 lo desactiva
@@ -143,9 +141,7 @@ class Settings(BaseSettings):
                 "(or set ENVIRONMENT=development on a dev machine)"
             )
         elif len(token) < MIN_INTERNAL_TOKEN_LENGTH:
-            problems.append(
-                f"INTERNAL_TOKEN must be at least {MIN_INTERNAL_TOKEN_LENGTH} characters in production"
-            )
+            problems.append(f"INTERNAL_TOKEN must be at least {MIN_INTERNAL_TOKEN_LENGTH} characters in production")
 
         # La API pública la llama el navegador desde la consola: solo orígenes https reales.
         if not self.cors_origin_list:
@@ -194,10 +190,7 @@ def is_local_host(url: str) -> bool:
     for stop in "/?#":
         rest = rest.split(stop, 1)[0]
     host = rest.rsplit("@", 1)[-1]
-    if host.startswith("["):
-        host = host[1:].split("]", 1)[0]
-    else:
-        host = host.split(":", 1)[0]
+    host = host[1:].split("]", 1)[0] if host.startswith("[") else host.split(":", 1)[0]
     return host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or host.endswith(".localhost")
 
 

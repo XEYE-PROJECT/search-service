@@ -1,0 +1,41 @@
+{
+  "training_id": 42,
+  "list_id": 7,
+  "user_id": 3,
+  "callback_url": "https://hooks.xeye.es/webhooks/training-update",
+  "list": {
+    "id": 7,
+    "name": "Herramientas",
+    "description": "Catálogo de ferretería"
+  },
+  "elements": [
+    {
+      "id": 101,
+      "text": "martillo de carpintero",
+      "description": "Mango de madera, 500 g",
+      "generated_description": null,
+      "trained": false
+    },
+    {
+      "id": 102,
+      "text": "destornillador de estrella",
+      "description": null,
+      "generated_description": "{\"v\": 1, \"summary\": [\"Destornillador de punta Phillips\"], \"queries\": [\"destornillador phillips\", \"destornillador estrella\"], \"model\": \"llama-3.3-70b-versatile\"}",
+      "trained": false
+    }
+  ],
+  "options": [
+    {
+      "key": "train_all",
+      "value": true
+    },
+    {
+      "key": "embedding_model",
+      "value": "paraphrase-multilingual-MiniLM-L12-v2"
+    },
+    {
+      "key": "force_enrich",
+      "value": false
+    }
+  ]
+}

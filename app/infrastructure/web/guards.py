@@ -82,10 +82,8 @@ class RequestGuardMiddleware:
                 host = value.decode("latin-1")
                 break
         host = host.strip().lower()
-        if host.startswith("["):  # IPv6 literal
-            host = host.split("]", 1)[0] + "]"
-        else:
-            host = host.split(":", 1)[0]
+        # Sin puerto; un literal IPv6 conserva sus corchetes.
+        host = host.split("]", 1)[0] + "]" if host.startswith("[") else host.split(":", 1)[0]
         return host in self._hosts
 
 

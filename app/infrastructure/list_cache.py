@@ -159,5 +159,7 @@ class ListDataCache:
             metrics.CACHE_EVENTS.labels("evict").inc()
             logger.info(
                 "Evicted list %d from cache (%.1f MiB freed, %.1f MiB in use)",
-                evicted_id, evicted.memory_bytes / 2**20, self._total_bytes / 2**20,
+                evicted_id,
+                evicted.memory_bytes / 2**20,
+                self._total_bytes / 2**20,
             )

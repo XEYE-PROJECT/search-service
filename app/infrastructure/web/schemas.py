@@ -139,7 +139,7 @@ class ApiKeyUpsertRequest(BaseModel):
     api_key: str | None = Field(default=None, alias="apiKey", min_length=1)
 
     @model_validator(mode="after")
-    def _require_a_key(self) -> "ApiKeyUpsertRequest":
+    def _require_a_key(self) -> ApiKeyUpsertRequest:
         if not self.key_hash and not self.api_key:
             raise ValueError("keyHash is required")
         return self

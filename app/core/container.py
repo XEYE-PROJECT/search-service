@@ -78,15 +78,16 @@ def build_container(
         connect_timeout=settings.backend_connect_timeout_seconds,
         retries=settings.backend_retries,
     )
-    embedder = embedder or ModelRegistry(
-        settings.embedding_model_default, settings.models_max_loaded
-    )
+    embedder = embedder or ModelRegistry(settings.embedding_model_default, settings.models_max_loaded)
 
     api_keys = ApiKeyStore()
     lists = ListCatalog()
     user_limits = UserLimits()
     catalog_service = CatalogService(
-        backend, api_keys, lists, user_limits=user_limits,
+        backend,
+        api_keys,
+        lists,
+        user_limits=user_limits,
         min_refresh_interval=settings.refresh_min_interval_seconds,
     )
     cache = ListDataCache(settings.cache_max_bytes, ttl_seconds=settings.cache_ttl_seconds)

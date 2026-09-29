@@ -17,9 +17,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 from .common import list_results_dir, load_runs  # noqa: E402
 
 METRIC_COLUMNS = ["top1_accuracy", "recall@3", "recall@5", "recall@10", "mrr"]
-RANK_BUCKETS = [("1", lambda r: r == 1), ("2-3", lambda r: r is not None and 2 <= r <= 3),
-                ("4-10", lambda r: r is not None and 4 <= r <= 10),
-                (">10 / no", lambda r: r is None or r > 10)]
+RANK_BUCKETS = [
+    ("1", lambda r: r == 1),
+    ("2-3", lambda r: r is not None and 2 <= r <= 3),
+    ("4-10", lambda r: r is not None and 4 <= r <= 10),
+    (">10 / no", lambda r: r is None or r > 10),
+]
 
 
 def run_label(run: dict) -> str:
@@ -30,17 +33,19 @@ def build_rows(runs: list[dict]) -> list[dict]:
     rows = []
     for run in runs:
         metrics = run["metrics"]
-        rows.append({
-            "run": run_label(run),
-            "timestamp": run["timestamp"],
-            "training_id": run.get("training_id") or "",
-            "queries": metrics["queries"],
-            **{col: metrics.get(col) for col in METRIC_COLUMNS},
-            "mean_found_rank": metrics.get("mean_found_rank"),
-            "not_found": metrics.get("not_found_count"),
-            "avg_ms": metrics.get("avg_duration_ms"),
-            "p95_ms": metrics.get("p95_duration_ms"),
-        })
+        rows.append(
+            {
+                "run": run_label(run),
+                "timestamp": run["timestamp"],
+                "training_id": run.get("training_id") or "",
+                "queries": metrics["queries"],
+                **{col: metrics.get(col) for col in METRIC_COLUMNS},
+                "mean_found_rank": metrics.get("mean_found_rank"),
+                "not_found": metrics.get("not_found_count"),
+                "avg_ms": metrics.get("avg_duration_ms"),
+                "p95_ms": metrics.get("p95_duration_ms"),
+            }
+        )
     return rows
 
 
@@ -128,15 +133,16 @@ def chart_ranks(runs: list[dict], charts_dir) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="python -m evaluation.compare",
-                                     description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="python -m evaluation.compare", description=__doc__.splitlines()[0])
     parser.add_argument("--list", required=True, dest="list_name")
     args = parser.parse_args()
 
     runs = load_runs(args.list_name)
     if not runs:
-        sys.exit(f"No hay runs en {list_results_dir(args.list_name)} — lanza antes "
-                 f"python -m evaluation.evaluate --list '{args.list_name}' ...")
+        sys.exit(
+            f"No hay runs en {list_results_dir(args.list_name)} — lanza antes "
+            f"python -m evaluation.evaluate --list '{args.list_name}' ..."
+        )
     print(f"{len(runs)} runs de {args.list_name!r}: " + ", ".join(run_label(r) for r in runs))
 
     directory = list_results_dir(args.list_name)

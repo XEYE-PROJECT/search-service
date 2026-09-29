@@ -1,0 +1,75 @@
+name: Checks
+
+# Comprobaciones reutilizables (workflow_call) que comparten los tres flujos del repo:
+#   - PR a master (ci.yml): solo estos checks.
+#   - push a master (deploy.yml): estos checks → imagen :sha → escaneo → despliegue.
+#   - tag vX.Y.Z (release.yml): estos checks → imagen :vX.Y.Z → release con notas del CHANGELOG.
+#
+# Jobs: `secrets` (gitleaks sobre todo el historial), `lint` (ruff + mypy, versiones fijadas
+# en requirements-dev.txt) y `test` (pytest). Todas las actions van fijadas por SHA de commit
+# (el tag es solo un comentario); Dependabot las actualiza. Las imágenes de herramientas van
+# por digest.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # Ningún secreto llega al historial: gitleaks sobre todo el repo (binario oficial vía docker;
+  # la action de gitleaks exige licencia en organizaciones, el binario no).
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact -v --exit-code 1
+
+  # ruff (lint + formato) y mypy con la configuración de pyproject.toml. mypy necesita las
+  # dependencias de la app instaladas (torch desde el índice CPU, como en el Dockerfile).
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install (torch CPU + deps + ruff/mypy fijados)
+        run: |
+          pip install --quiet "$(grep -i '^torch==' requirements.lock)" --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet -r requirements-dev.txt
+          # Mismas versiones que requirements-dev.txt (mantener ambos sitios en sincronía).
+          pip install --quiet ruff==0.16.9 mypy==2.3.1
+      - name: ruff check
+        run: ruff check --output-format=github app tests
+      - name: ruff format --check
+        run: ruff format --check app tests
+      - name: mypy
+        run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install (torch CPU, como en el Dockerfile)
+        run: |
+          pip install --quiet "$(grep -i '^torch==' requirements.lock)" --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet -r requirements-dev.txt
+      # Si falla, la cola del log sale como anotación del check (visible sin permisos de admin).
+      - name: pytest
+        run: |
+          set -o pipefail
+          pytest -q -x -p no:cacheprovider 2>&1 | tee pytest.log || {
+            printf '::error title=pytest::%s\n' "$(tail -c 3500 pytest.log | tr '\n' '\r' | sed 's/\r/%0A/g')"
+            exit 1
+          }

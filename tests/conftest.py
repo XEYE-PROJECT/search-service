@@ -51,8 +51,7 @@ class FakeBackend:
         await asyncio.sleep(0)  # cede el control, como una ida y vuelta HTTP real
         if self.fail_bootstrap:
             raise ConnectionError("backend down")
-        return BootstrapData(api_keys=list(self.api_keys), lists=list(self.lists),
-                             user_limits=list(self.user_limits))
+        return BootstrapData(api_keys=list(self.api_keys), lists=list(self.lists), user_limits=list(self.user_limits))
 
     async def fetch_list_data(self, list_id: int) -> ListDataPayload | None:
         self.list_fetches.append(list_id)
@@ -109,7 +108,10 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
     lists = ListCatalog()
     user_limits = UserLimits()
     catalog_service = CatalogService(
-        backend, api_keys, lists, user_limits=user_limits,
+        backend,
+        api_keys,
+        lists,
+        user_limits=user_limits,
         min_refresh_interval=settings.refresh_min_interval_seconds,
     )
     cache = ListDataCache(settings.cache_max_bytes)
@@ -124,7 +126,10 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
     rate_limiter = RateLimiter(settings.rate_limit_per_minute)
     ip_rate_limiter = RateLimiter(settings.rate_limit_per_ip_per_minute)
     search = SearchUseCase(
-        catalog_service, list_data, embedder, log_queue,
+        catalog_service,
+        list_data,
+        embedder,
+        log_queue,
         ScoringConfig(
             text_weight=settings.search_text_weight,
             semantic_weight=settings.search_semantic_weight,
@@ -132,10 +137,19 @@ def make_container(settings: Settings, backend: FakeBackend, embedder: FakeEmbed
         ),
     )
     return Container(
-        settings=settings, backend=backend, embedder=embedder, api_keys=api_keys,
-        lists=lists, user_limits=user_limits, catalog_service=catalog_service, cache=cache,
-        list_data=list_data, log_queue=log_queue, rate_limiter=rate_limiter,
-        ip_rate_limiter=ip_rate_limiter, search=search,
+        settings=settings,
+        backend=backend,
+        embedder=embedder,
+        api_keys=api_keys,
+        lists=lists,
+        user_limits=user_limits,
+        catalog_service=catalog_service,
+        cache=cache,
+        list_data=list_data,
+        log_queue=log_queue,
+        rate_limiter=rate_limiter,
+        ip_rate_limiter=ip_rate_limiter,
+        search=search,
     )
 
 

@@ -7,8 +7,11 @@ from app.core.config import MIN_INTERNAL_TOKEN_LENGTH, Settings, is_local_host
 from app.core.security import constant_time_equals, hash_api_key
 
 #: Lo que un env de producción válido tiene además del token (ver xeye-infra/env/search.env.example).
-PROD_OK = dict(cors_origins="https://xeye.es,https://www.xeye.es", backend_url="http://xeye-backend:8000",
-               allowed_hosts="search.xeye.es,search-service,localhost")
+PROD_OK = dict(
+    cors_origins="https://xeye.es,https://www.xeye.es",
+    backend_url="http://xeye-backend:8000",
+    allowed_hosts="search.xeye.es,search-service,localhost",
+)
 
 
 def settings(**overrides) -> Settings:
@@ -68,8 +71,12 @@ def test_production_rejects_dev_urls_and_origins(field, value, variable):
 
 def test_production_reports_every_problem_at_once():
     with pytest.raises(ValidationError) as info:
-        settings(environment="production", internal_token="short", cors_origins="http://localhost:3000",
-                 backend_url="http://localhost:8000")
+        settings(
+            environment="production",
+            internal_token="short",
+            cors_origins="http://localhost:3000",
+            backend_url="http://localhost:8000",
+        )
     message = str(info.value)
     assert "INTERNAL_TOKEN" in message and "CORS_ORIGINS" in message and "BACKEND_URL" in message
 

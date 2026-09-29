@@ -87,8 +87,11 @@ class TestReadiness:
             # Sin key sigue siendo 401: no hace falta catálogo para saber que falta la cabecera.
             assert_error(await search(client, "camara", key=None), 401, "API_KEY_MISSING")
             # El playground también espera al catálogo.
-            assert_error(await client.post("/v1/lists/5/search", headers=INTERNAL, json={"search_term": "x"}),
-                         503, "SERVICE_NOT_READY")
+            assert_error(
+                await client.post("/v1/lists/5/search", headers=INTERNAL, json={"search_term": "x"}),
+                503,
+                "SERVICE_NOT_READY",
+            )
             # En cuanto el backend vuelve, la misma petición se sirve (recarga inmediata).
             seeded_backend.fail_bootstrap = False
             assert (await search(client, "camara")).status_code == 200
@@ -110,8 +113,14 @@ class TestReadiness:
 
 class TestDegradation:
     async def test_text_only_list_is_flagged_no_embeddings(self, ready_client):
-        push = {"userId": 10, "listName": "Texto", "isPublic": True, "embeddingsData": None, "model": None,
-                "elements": [{"id": 1, "text": "Algo", "params": None, "description": None}]}
+        push = {
+            "userId": 10,
+            "listName": "Texto",
+            "isPublic": True,
+            "embeddingsData": None,
+            "model": None,
+            "elements": [{"id": 1, "text": "Algo", "params": None, "description": None}],
+        }
         await ready_client.post("/v1/lists/8/index", headers=INTERNAL, json=push)
         response = await search(ready_client, "algo", list_name="Texto")
         body = response.json()

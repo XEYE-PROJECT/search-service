@@ -32,10 +32,15 @@ def _align_by_id(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """(matriz_alineada, vector_rows, element_of_row) o None si nada casa."""
     row_by_id = {element_id: row for row, element_id in enumerate(trained_ids)}
-    positions = [i for i, element_id in enumerate(element_ids) if element_id in row_by_id]
-    if not positions:
+    matched = [
+        (i, element_id)
+        for i, element_id in enumerate(element_ids)
+        if element_id is not None and element_id in row_by_id
+    ]
+    if not matched:
         return None
-    aligned = np.ascontiguousarray(matrix[[row_by_id[element_ids[i]] for i in positions]])
+    positions = [i for i, _ in matched]
+    aligned = np.ascontiguousarray(matrix[[row_by_id[element_id] for _, element_id in matched]])
     vector_rows = np.full(len(element_ids), -1, dtype=np.int32)
     vector_rows[positions] = np.arange(len(positions), dtype=np.int32)
     return aligned, vector_rows, np.asarray(positions, dtype=np.int32)
@@ -70,7 +75,9 @@ def build_list_data_sync(payload: ListDataPayload, settings: Settings) -> ListSe
                 if len(element_of_row) < len(elements):
                     logger.info(
                         "List %d: %d/%d elements have vectors (rest text-only until retrain)",
-                        payload.meta.id, len(element_of_row), len(elements),
+                        payload.meta.id,
+                        len(element_of_row),
+                        len(elements),
                     )
         else:  # payload legacy: la guarda por conteo ya aseguró filas == elementos
             vector_rows = np.arange(len(elements), dtype=np.int32)
@@ -114,8 +121,11 @@ def build_list_data_sync(payload: ListDataPayload, settings: Settings) -> ListSe
     )
     logger.info(
         "Built search data for list %d: %d elements, embeddings=%s, model=%s, %.1f MiB",
-        data.list_id, data.size, "yes" if index is not None else "no",
-        data.model_name or "-", memory / 2**20,
+        data.list_id,
+        data.size,
+        "yes" if index is not None else "no",
+        data.model_name or "-",
+        memory / 2**20,
     )
     return data
 

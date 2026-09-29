@@ -32,26 +32,35 @@ TOP_N_SAVED = 5
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog="python -m evaluation.evaluate", description=__doc__.splitlines()[0]
+    parser = argparse.ArgumentParser(prog="python -m evaluation.evaluate", description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--list", required=True, dest="list_name", help="nombre EXACTO de la lista (sensible a mayúsculas)"
     )
-    parser.add_argument("--list", required=True, dest="list_name",
-                        help="nombre EXACTO de la lista (sensible a mayúsculas)")
-    parser.add_argument("--api-key", default=os.environ.get("XEYE_API_KEY"),
-                        help="API key xeye_... (o variable de entorno XEYE_API_KEY)")
-    parser.add_argument("--search-url", default="http://localhost:8002",
-                        help="base del search-service (producción: https://search.xeye.es)")
-    parser.add_argument("--dataset", type=Path, default=None,
-                        help="fichero de consultas (por defecto evaluation/datasets/<lista>.json)")
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("XEYE_API_KEY"),
+        help="API key xeye_... (o variable de entorno XEYE_API_KEY)",
+    )
+    parser.add_argument(
+        "--search-url",
+        default="http://localhost:8002",
+        help="base del search-service (producción: https://search.xeye.es)",
+    )
+    parser.add_argument(
+        "--dataset", type=Path, default=None, help="fichero de consultas (por defecto evaluation/datasets/<lista>.json)"
+    )
     parser.add_argument("--limit", type=int, default=50, help="resultados pedidos por consulta")
     parser.add_argument("--concurrency", type=int, default=4)
-    parser.add_argument("--qpm", type=int, default=55,
-                        help="consultas/minuto máx. (el servicio corta por usuario: 60/min por defecto)")
-    parser.add_argument("--label", default=None,
-                        help="etiqueta del run (p.ej. el modelo de embedding) si no usas --email")
+    parser.add_argument(
+        "--qpm", type=int, default=55, help="consultas/minuto máx. (el servicio corta por usuario: 60/min por defecto)"
+    )
+    parser.add_argument(
+        "--label", default=None, help="etiqueta del run (p.ej. el modelo de embedding) si no usas --email"
+    )
     parser.add_argument("--backend-url", default="http://localhost:8000")
-    parser.add_argument("--email", default=None,
-                        help="credenciales del backend para etiquetar el run con el modelo en uso")
+    parser.add_argument(
+        "--email", default=None, help="credenciales del backend para etiquetar el run con el modelo en uso"
+    )
     parser.add_argument("--password", default=None)
     return parser.parse_args()
 
@@ -66,8 +75,10 @@ def load_dataset(path: Path) -> list[dict]:
         sys.exit(f"{len(problems)} entradas del dataset sin 'query' o 'expected'")
     identical = [e["query"] for e in entries if normalize(e["query"]) == normalize(e["expected"])]
     if identical:
-        print(f"AVISO: {len(identical)} consultas idénticas (normalizadas) a su esperado — el "
-              f"servicio les da score 1.0 por match exacto y no miden nada: {identical}")
+        print(
+            f"AVISO: {len(identical)} consultas idénticas (normalizadas) a su esperado — el "
+            f"servicio les da score 1.0 por match exacto y no miden nada: {identical}"
+        )
     return entries
 
 
@@ -108,8 +119,7 @@ class Pacer:
             await asyncio.sleep(delay)
 
 
-async def run_query(client: httpx.AsyncClient, args: argparse.Namespace,
-                    pacer: Pacer, entry: dict) -> dict:
+async def run_query(client: httpx.AsyncClient, args: argparse.Namespace, pacer: Pacer, entry: dict) -> dict:
     payload = {
         "list_name": args.list_name,
         "search_term": entry["query"],
@@ -124,14 +134,15 @@ async def run_query(client: httpx.AsyncClient, args: argparse.Namespace,
         client_ms = int((time.monotonic() - started) * 1000)
         if response.status_code == 429:
             wait = 61 - (time.time() % 60)
-            print(f"  429 rate limit ({entry['query'][:40]!r}); espero {wait:.0f}s "
-                  f"(si el servidor es tuyo, sube RATE_LIMIT_PER_MINUTE)")
+            print(
+                f"  429 rate limit ({entry['query'][:40]!r}); espero {wait:.0f}s "
+                f"(si el servidor es tuyo, sube RATE_LIMIT_PER_MINUTE)"
+            )
             if attempt < MAX_RETRIES_429:
                 await asyncio.sleep(wait)
                 continue
         if response.status_code != 200:
-            raise RuntimeError(
-                f"HTTP {response.status_code} en {entry['query']!r}: {response.text[:300]}")
+            raise RuntimeError(f"HTTP {response.status_code} en {entry['query']!r}: {response.text[:300]}")
         break
     body = response.json()
     results = body.get("results", [])
@@ -151,8 +162,7 @@ async def run_query(client: httpx.AsyncClient, args: argparse.Namespace,
         "client_ms": client_ms,
         "total_results": body.get("total_results"),
         "top": [
-            {k: r.get(k) for k in ("item", "score", "text_score", "semantic_score")}
-            for r in results[:TOP_N_SAVED]
+            {k: r.get(k) for k in ("item", "score", "text_score", "semantic_score")} for r in results[:TOP_N_SAVED]
         ],
     }
 
@@ -167,6 +177,7 @@ async def run_all(args: argparse.Namespace, entries: list[dict]) -> list[dict]:
         headers={"X-API-Key": args.api_key},
         timeout=30.0,
     ) as client:
+
         async def worker(entry: dict) -> dict:
             nonlocal done
             async with semaphore:
@@ -181,9 +192,19 @@ async def run_all(args: argparse.Namespace, entries: list[dict]) -> list[dict]:
 
 def print_summary(metrics: dict, queries: list[dict]) -> None:
     print("\n=== Métricas ===")
-    for key in ("queries", "top1_accuracy", "recall@3", "recall@5", "recall@10", "mrr",
-                "mean_found_rank", "not_found_count", "avg_duration_ms", "p95_duration_ms",
-                "semantic_contribution"):
+    for key in (
+        "queries",
+        "top1_accuracy",
+        "recall@3",
+        "recall@5",
+        "recall@10",
+        "mrr",
+        "mean_found_rank",
+        "not_found_count",
+        "avg_duration_ms",
+        "p95_duration_ms",
+        "semantic_contribution",
+    ):
         value = metrics.get(key)
         if isinstance(value, float):
             value = f"{value:.3f}"
@@ -191,8 +212,10 @@ def print_summary(metrics: dict, queries: list[dict]) -> None:
     if metrics.get("by_category"):
         print("\n=== Por categoría de consulta ===")
         for category, sub in metrics["by_category"].items():
-            print(f"  {category:12} n={sub['queries']:<3} top1={sub['top1_accuracy']:.2f} "
-                  f"recall@3={sub['recall@3']:.2f} mrr={sub['mrr']:.2f}")
+            print(
+                f"  {category:12} n={sub['queries']:<3} top1={sub['top1_accuracy']:.2f} "
+                f"recall@3={sub['recall@3']:.2f} mrr={sub['mrr']:.2f}"
+            )
     misses = [q for q in queries if q["rank"] is None or q["rank"] > 3]
     if misses:
         print("\n=== Fallos (fuera del top-3) ===")
@@ -213,17 +236,32 @@ def save_run(run: dict, list_name: str) -> Path:
 
     csv_path = directory / "runs.csv"
     metrics = run["metrics"]
-    header = ("timestamp,label,model,training_id,queries,top1_accuracy,recall@3,recall@5,"
-              "recall@10,mrr,mean_found_rank,not_found,avg_duration_ms,p95_duration_ms\n")
+    header = (
+        "timestamp,label,model,training_id,queries,top1_accuracy,recall@3,recall@5,"
+        "recall@10,mrr,mean_found_rank,not_found,avg_duration_ms,p95_duration_ms\n"
+    )
     if not csv_path.exists():
         csv_path.write_text(header, encoding="utf-8")
+
     def fmt(value):  # noqa: E306
         return "" if value is None else (f"{value:.4f}" if isinstance(value, float) else str(value))
-    row = [run["timestamp"], run.get("label") or "", run.get("model") or "",
-           run.get("training_id") or "", metrics["queries"], metrics["top1_accuracy"],
-           metrics["recall@3"], metrics["recall@5"], metrics["recall@10"], metrics["mrr"],
-           metrics["mean_found_rank"], metrics["not_found_count"], metrics["avg_duration_ms"],
-           metrics["p95_duration_ms"]]
+
+    row = [
+        run["timestamp"],
+        run.get("label") or "",
+        run.get("model") or "",
+        run.get("training_id") or "",
+        metrics["queries"],
+        metrics["top1_accuracy"],
+        metrics["recall@3"],
+        metrics["recall@5"],
+        metrics["recall@10"],
+        metrics["mrr"],
+        metrics["mean_found_rank"],
+        metrics["not_found_count"],
+        metrics["avg_duration_ms"],
+        metrics["p95_duration_ms"],
+    ]
     with csv_path.open("a", encoding="utf-8") as fh:
         fh.write(",".join(fmt(v) for v in row) + "\n")
     return path
@@ -243,8 +281,10 @@ def main() -> None:
     if not label:
         print("AVISO: run sin etiqueta (--label o --email); compare lo mostrará por timestamp")
 
-    print(f"Evaluando {len(entries)} consultas de {dataset_file.name} contra "
-          f"{args.search_url} (lista {args.list_name!r}, modelo {model or label or '?'})\n")
+    print(
+        f"Evaluando {len(entries)} consultas de {dataset_file.name} contra "
+        f"{args.search_url} (lista {args.list_name!r}, modelo {model or label or '?'})\n"
+    )
     started = time.time()
     queries = asyncio.run(run_all(args, entries))
     metrics = summarize(queries)

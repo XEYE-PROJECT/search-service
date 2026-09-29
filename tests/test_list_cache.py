@@ -6,9 +6,18 @@ from app.infrastructure.list_cache import ListDataCache
 
 def make_data(list_id: int, user_id: int = 1, memory: int = 100) -> ListSearchData:
     return ListSearchData(
-        list_id=list_id, user_id=user_id, element_ids=[], texts=[], processed=[],
-        params=[], embeddings=None, vector_rows=None, element_of_row=None,
-        model_name=None, index=None, memory_bytes=memory,
+        list_id=list_id,
+        user_id=user_id,
+        element_ids=[],
+        texts=[],
+        processed=[],
+        params=[],
+        embeddings=None,
+        vector_rows=None,
+        element_of_row=None,
+        model_name=None,
+        index=None,
+        memory_bytes=memory,
     )
 
 

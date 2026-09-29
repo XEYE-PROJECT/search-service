@@ -1,0 +1,19 @@
+name: CI
+
+# Pull request: los checks de checks.yml (gitleaks, ruff + mypy, pytest) y nada más — la imagen
+# solo se construye y despliega en push a master (deploy.yml) y en tags vX.Y.Z (release.yml).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+    permissions:
+      contents: read

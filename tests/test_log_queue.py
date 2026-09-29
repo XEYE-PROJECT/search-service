@@ -8,9 +8,17 @@ from tests.conftest import FakeBackend
 
 def entry(term: str = "q") -> LogEntry:
     return LogEntry(
-        user_id=1, api_key_id=2, list_id=3, list_name="L", endpoint="/search",
-        search_term=term, total_results=1, duration_ms=5, session=None,
-        results={"item": 0.9}, searched_at="2026-07-11T10:00:00+00:00",
+        user_id=1,
+        api_key_id=2,
+        list_id=3,
+        list_name="L",
+        endpoint="/search",
+        search_term=term,
+        total_results=1,
+        duration_ms=5,
+        session=None,
+        results={"item": 0.9},
+        searched_at="2026-07-11T10:00:00+00:00",
     )
 
 

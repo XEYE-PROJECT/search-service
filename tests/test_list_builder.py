@@ -59,8 +59,6 @@ def test_trained_ids_define_expected_row_count():
     # 3 ids entrenados pero la lista actual creció a 5 elementos: la matriz debe decodificar
     # igualmente (filas == len(trained_ids)) y los 2 elementos nuevos quedan sin vector.
     matrix = np.eye(3, 4, dtype=np.float32)
-    data = build_list_data_sync(
-        payload(elems(1, 2, 3, 4, 5), matrix, trained_ids=[1, 2, 3]), SETTINGS
-    )
+    data = build_list_data_sync(payload(elems(1, 2, 3, 4, 5), matrix, trained_ids=[1, 2, 3]), SETTINGS)
     assert data.index is not None
     assert data.vector_rows.tolist() == [0, 1, 2, -1, -1]

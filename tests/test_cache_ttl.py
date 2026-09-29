@@ -16,7 +16,8 @@ def payload(list_id: int, name: str = "L") -> ListDataPayload:
     return ListDataPayload(
         meta=ListMeta(id=list_id, user_id=1, name=name, is_public=True),
         elements=[{"id": 1, "text": name, "params": None, "description": None}],
-        embeddings_data=None, model=None,
+        embeddings_data=None,
+        model=None,
     )
 
 

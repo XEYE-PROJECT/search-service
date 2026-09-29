@@ -2,12 +2,8 @@
 
 import asyncio
 
-import pytest
-
 from app.application.catalog import ApiKeyStore, CatalogService, ListCatalog
-from app.application.ports import BootstrapData
 from app.core.security import hash_api_key
-from app.domain.models import ListMeta
 from app.infrastructure.embeddings import ModelRegistry
 from app.infrastructure.list_cache import ListDataCache
 from tests.conftest import FakeBackend

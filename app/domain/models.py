@@ -46,11 +46,11 @@ class ListSearchData:
     texts: list[str]
     processed: list[str]
     params: list[str | None]
-    embeddings: "np.ndarray | None"
-    vector_rows: "np.ndarray | None"
-    element_of_row: "np.ndarray | None"
+    embeddings: np.ndarray | None
+    vector_rows: np.ndarray | None
+    element_of_row: np.ndarray | None
     model_name: str | None
-    index: "VectorIndex | None"
+    index: VectorIndex | None
     memory_bytes: int = 0
 
     @property

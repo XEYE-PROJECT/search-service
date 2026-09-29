@@ -76,10 +76,20 @@ class RequestContextMiddleware:
                     key = raw_key[:KEY_PREFIX_LENGTH] + ("…" if len(raw_key) > KEY_PREFIX_LENGTH else "")
                 ip = _client_ip(scope)
                 access_log.info(
-                    "%s %s %d %.1fms ip=%s key=%s", method, path, status, elapsed * 1000, ip, key,
+                    "%s %s %d %.1fms ip=%s key=%s",
+                    method,
+                    path,
+                    status,
+                    elapsed * 1000,
+                    ip,
+                    key,
                     extra={
-                        "method": method, "path": path, "status": status,
-                        "duration_ms": round(elapsed * 1000, 1), "ip": ip, "key_prefix": key,
+                        "method": method,
+                        "path": path,
+                        "status": status,
+                        "duration_ms": round(elapsed * 1000, 1),
+                        "ip": ip,
+                        "key_prefix": key,
                     },
                 )
             request_id_var.reset(token)

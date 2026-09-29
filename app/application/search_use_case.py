@@ -16,8 +16,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import anyio
 import numpy as np
@@ -42,10 +43,10 @@ _MIN_CANDIDATES = 100
 _CANDIDATE_FACTOR = 4
 
 # Motivos de degradación (estables: los clientes pueden hacer switch sobre ellos).
-NO_EMBEDDINGS = "no_embeddings"          # la lista no tiene vectores entrenados: solo texto
+NO_EMBEDDINGS = "no_embeddings"  # la lista no tiene vectores entrenados: solo texto
 MODEL_UNAVAILABLE = "model_unavailable"  # el modelo de embedding no pudo cargarse: solo texto
-MODEL_MISMATCH = "model_mismatch"        # la query se embebió con otra dimensión: solo texto
-STALE_DATA = "stale_data"                # datos más viejos que el TTL y sin poder revalidar
+MODEL_MISMATCH = "model_mismatch"  # la query se embebió con otra dimensión: solo texto
+STALE_DATA = "stale_data"  # datos más viejos que el TTL y sin poder revalidar
 
 
 def compute_text_scores(processed: list[str], query: str) -> np.ndarray:
@@ -156,8 +157,13 @@ class SearchUseCase:
 
         if register_log:
             self._enqueue_log(
-                meta, auth, "/search", search_term,
-                total_results=len(results), duration_ms=duration_ms, session=session,
+                meta,
+                auth,
+                "/search",
+                search_term,
+                total_results=len(results),
+                duration_ms=duration_ms,
+                session=session,
                 results={hit.item: round(hit.score, 2) for hit in hits},
             )
 
@@ -181,13 +187,17 @@ class SearchUseCase:
             "error": None,
         }
 
-    async def target(
-        self, meta: ListMeta, auth: ApiKeyInfo, target_term: str, session: str
-    ) -> dict:
+    async def target(self, meta: ListMeta, auth: ApiKeyInfo, target_term: str, session: str) -> dict:
         """Sin búsqueda: solo un log de auditoría de qué resultado eligió el usuario."""
         self._enqueue_log(
-            meta, auth, "/target", target_term,
-            total_results=0, duration_ms=0, session=session, results=None,
+            meta,
+            auth,
+            "/target",
+            target_term,
+            total_results=0,
+            duration_ms=0,
+            session=session,
+            results=None,
         )
         return {"success": True}
 
@@ -200,18 +210,14 @@ class SearchUseCase:
         big = data.size > _SCORING_THREAD_THRESHOLD
 
         if big:
-            text_scores = await anyio.to_thread.run_sync(
-                compute_text_scores, data.processed, query_norm
-            )
+            text_scores = await anyio.to_thread.run_sync(compute_text_scores, data.processed, query_norm)
         else:
             text_scores = compute_text_scores(data.processed, query_norm)
 
         semantic = await self._semantic_scores(data, search_term, text_scores, limit, degradation)
 
         if big:
-            return await anyio.to_thread.run_sync(
-                self._combine_hits, data, query_norm, text_scores, semantic, limit
-            )
+            return await anyio.to_thread.run_sync(self._combine_hits, data, query_norm, text_scores, semantic, limit)
         return self._combine_hits(data, query_norm, text_scores, semantic, limit)
 
     def _combine_hits(
@@ -222,6 +228,7 @@ class SearchUseCase:
         semantic: _Semantic | None,
         limit: int,
     ) -> list[SearchHit]:
+        candidates: Iterable[int]
         if semantic is not None and semantic.by_element is not None:
             candidates = sorted(semantic.by_element)
         else:
@@ -260,8 +267,11 @@ class SearchUseCase:
             return None
         if semantic.by_element is not None:
             return semantic.by_element.get(i)
-        row = int(data.vector_rows[i])
-        return float(semantic.row_scores[row]) if row >= 0 else None
+        vector_rows, row_scores = data.vector_rows, semantic.row_scores
+        if vector_rows is None or row_scores is None:  # sin vectores no hay puntuación semántica
+            return None
+        row = int(vector_rows[i])
+        return float(row_scores[row]) if row >= 0 else None
 
     async def _semantic_scores(
         self,
@@ -271,9 +281,12 @@ class SearchUseCase:
         limit: int,
         degradation: _Degradation,
     ) -> _Semantic | None:
-        if data.index is None:
+        # list_builder garantiza que índice y alineación por id van juntos (los tres None o
+        # los tres presentes); se comprueba aquí para que el tipo lo refleje.
+        if data.index is None or data.vector_rows is None or data.element_of_row is None:
             degradation.add(NO_EMBEDDINGS)
             return None
+        vector_rows, element_of_row = data.vector_rows, data.element_of_row
         query_vec = await self._embedder.embed_query(data.model_name, search_term)
         if query_vec is None:
             degradation.add(MODEL_UNAVAILABLE)
@@ -281,7 +294,9 @@ class SearchUseCase:
         if query_vec.shape[0] != data.index.dim:
             logger.warning(
                 "Query embedding dim %d != list %d embeddings dim %d (model mismatch); text-only",
-                query_vec.shape[0], data.list_id, data.index.dim,
+                query_vec.shape[0],
+                data.list_id,
+                data.index.dim,
             )
             degradation.add(MODEL_MISMATCH)
             return None
@@ -293,9 +308,7 @@ class SearchUseCase:
         # da >0 a casi todo, así que "todo texto no nulo" no lo sería).
         k = max(limit * _CANDIDATE_FACTOR, _MIN_CANDIDATES)
         row_candidates = data.index.top_candidates(query_vec, k)
-        by_element: dict[int, float | None] = {
-            int(data.element_of_row[row]): score for row, score in row_candidates.items()
-        }
+        by_element: dict[int, float | None] = {int(element_of_row[row]): score for row, score in row_candidates.items()}
         m = min(k, data.size)
         top_text = np.argpartition(-text_scores, m - 1)[:m]
         missing_rows: list[tuple[int, int]] = []
@@ -303,7 +316,7 @@ class SearchUseCase:
             element = int(element)
             if text_scores[element] <= 0 or element in by_element:
                 continue
-            row = int(data.vector_rows[element])
+            row = int(vector_rows[element])
             if row >= 0:
                 missing_rows.append((element, row))
             else:
@@ -336,7 +349,7 @@ class SearchUseCase:
             duration_ms=duration_ms,
             session=session,
             results=results,
-            searched_at=datetime.now(timezone.utc).isoformat(),
+            searched_at=datetime.now(UTC).isoformat(),
         )
         if not self._log_queue.enqueue(entry):
             logger.warning("Search-log queue full and no spool; dropped a %s entry", endpoint)

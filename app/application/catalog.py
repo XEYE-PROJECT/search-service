@@ -43,9 +43,7 @@ class ApiKeyStore:
 
     def replace_all(self, entries: list[tuple[int, int, str]]) -> None:
         """``entries`` = ``(id, user_id, key_hash)``."""
-        self._by_hash = {
-            key_hash: ApiKeyInfo(id=key_id, user_id=user_id) for key_id, user_id, key_hash in entries
-        }
+        self._by_hash = {key_hash: ApiKeyInfo(id=key_id, user_id=user_id) for key_id, user_id, key_hash in entries}
         self._hash_by_id = {key_id: key_hash for key_id, user_id, key_hash in entries}
 
     def upsert(self, key_id: int, user_id: int, key_hash: str) -> None:
@@ -195,10 +193,7 @@ class CatalogService:
         async with self._refresh_lock:
             if self._refreshes_applied != applied_before:
                 return True  # otro refrescó mientras esperábamos
-            if (
-                self._last_refresh is not None
-                and time.monotonic() - self._last_refresh < self._min_refresh_interval
-            ):
+            if self._last_refresh is not None and time.monotonic() - self._last_refresh < self._min_refresh_interval:
                 return False
             try:
                 await self._refresh_locked()
@@ -222,14 +217,15 @@ class CatalogService:
             self.ready = True
             logger.info(
                 "Catalog refreshed: %d api keys, %d lists, %d user limits",
-                len(self.api_keys), len(self.lists), len(self.user_limits),
+                len(self.api_keys),
+                len(self.lists),
+                len(self.user_limits),
             )
             return
         # Siguieron llegando pushes en pleno fetch: esos mismos pushes mantienen fresco el
         # catálogo, así que saltarse este snapshot es seguro. Se reintenta el próximo ciclo.
         self._last_refresh = time.monotonic()
-        logger.warning("Catalog refresh skipped after %d attempts (concurrent updates)",
-                       self._MAX_REFRESH_ATTEMPTS)
+        logger.warning("Catalog refresh skipped after %d attempts (concurrent updates)", self._MAX_REFRESH_ATTEMPTS)
 
     def _mutation_marker(self) -> int:
         return self.api_keys.mutations + self.lists.mutations + self.user_limits.mutations

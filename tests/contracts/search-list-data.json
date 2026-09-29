@@ -1,0 +1,26 @@
+{
+  "id": 7,
+  "userId": 3,
+  "name": "Herramientas",
+  "isPublic": true,
+  "model": "{\"embedding_model\": \"paraphrase-multilingual-MiniLM-L12-v2\", \"llm_model\": \"llama-3.3-70b-versatile\", \"strategy\": \"default\", \"dimension\": 4, \"list_id\": 7}",
+  "embeddingsData": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGY0JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDQpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIArNzMw9zcxMPpqZmT7NzMw+AAAAP5qZGT8zMzM/zcxMPw==",
+  "trainedElementIds": [
+    101,
+    102
+  ],
+  "elements": [
+    {
+      "id": 101,
+      "text": "martillo de carpintero",
+      "params": "{\"precio\":12.5,\"stock\":8}",
+      "description": "Mango de madera, 500 g"
+    },
+    {
+      "id": 102,
+      "text": "destornillador de estrella",
+      "params": null,
+      "description": null
+    }
+  ]
+}

@@ -154,6 +154,29 @@ y guarda el spool de logs en `/app/data` (montar un volumen). El compose de dev 
 `SEARCH_SERVICE_URL=http://localhost:8002` (o `http://xeye-search-service:8002` en
 docker) y el mismo `SEARCH_INTERNAL_TOKEN`.
 
+## Calidad y CI
+
+```bash
+# en local, con el venv (ruff y mypy van fijados en requirements-dev.txt)
+ruff check app tests && ruff format --check app tests   # lint + formato (`ruff format app tests` arregla)
+mypy                                                    # tipos de app/ (config en pyproject.toml)
+pytest -q                                               # tests, incluidos los de contrato
+```
+
+`tests/test_contracts.py` consume con el código real las fixtures de `tests/contracts/` (copias
+byte a byte de las canónicas de `backend/src/test/resources/contracts/`; no se editan aquí): el
+push de índice, el bootstrap paginado y los datos de lista. Un cambio de campo en el backend rompe
+aquí en CI, no en producción. La prueba de carga (k6) vive en [`loadtest/`](loadtest/README.md) y
+se lanza a mano.
+
+Flujo en GitHub (`.github/workflows/`):
+
+- **PR** → `ci.yml` ejecuta los checks de `checks.yml`: gitleaks, ruff + mypy y pytest.
+- **push a master** → `deploy.yml`: los mismos checks, imagen `:sha` en GHCR, Trivy y despliegue.
+- **tag `vX.Y.Z`** → `release.yml`: checks, imagen `:vX.Y.Z` y GitHub Release con la sección de esa
+  versión de `CHANGELOG.md` como notas. Para publicar una versión: `bash release.sh X.Y.Z` (añade
+  la entrada al CHANGELOG, crea el tag y lo empuja).
+
 ## Producción (fallo cerrado)
 
 `ENVIRONMENT=production` es el valor por defecto: el servicio **no arranca** si
