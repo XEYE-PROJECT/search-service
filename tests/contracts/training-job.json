@@ -3,10 +3,12 @@
   "list_id": 7,
   "user_id": 3,
   "callback_url": "https://hooks.xeye.es/webhooks/training-update",
+  "webhook_token": "42.288039d92fa1aa710434aa348516a33ed4cc265eb7206aa9f9199c0c284c7402",
   "list": {
     "id": 7,
     "name": "Herramientas",
-    "description": "Catálogo de ferretería"
+    "description": "Catálogo de ferretería",
+    "llm_enrichment": true
   },
   "elements": [
     {

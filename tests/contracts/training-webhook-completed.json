@@ -19,6 +19,13 @@
   },
   "cost": {
     "runpod": 0.000694,
-    "total": 0.000694
+    "llm": 0.00012,
+    "total": 0.000814
+  },
+  "usage": {
+    "llm_input_tokens": 812,
+    "llm_output_tokens": 203,
+    "llm_requests": 1,
+    "llm_budget_exhausted": false
   }
 }
