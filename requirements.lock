@@ -3,7 +3,7 @@
 # torch va sin sufijo: la imagen lo instala desde el índice CPU de PyTorch.
 annotated-doc==0.0.4
 annotated-types==0.7.0
-anyio==4.14.1
+anyio==4.14.2
 certifi==2026.6.17
 click==8.4.2
 faiss-cpu==1.14.3
