@@ -16,6 +16,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Los rangos de requirements.txt solo se tocan si la versión nueva queda fuera de ellos (no
+    # una PR por cada release que sube el mínimo); las versiones exactas van en requirements.lock.
+    versioning-strategy: increase-if-necessary
     groups:
       python-minor-patch:
         update-types: ["minor", "patch"]
@@ -24,9 +27,16 @@ updates:
       # regenerando requirements.lock (README).
       - dependency-name: torch
       - dependency-name: sentence-transformers
+      # numpy va ligado a la versión de torch.
+      - dependency-name: numpy
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
       day: monday
+    ignore:
+      # Cambiar de versión de Python (3.11 -> 3.12+; para Dependabot es un salto "menor") exige
+      # rehacer requirements.lock y reprobar torch: a mano. Aquí solo llegan parches y digests.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
